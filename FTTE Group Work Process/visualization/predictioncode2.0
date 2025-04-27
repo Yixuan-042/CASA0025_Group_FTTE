@@ -1,0 +1,214 @@
+// ===============================
+// Predicting co2 emissions using random forest regression
+// ===============================
+
+var landcoverImg = classified.rename('landcover');
+var populationImg = popMasked.rename('population');
+var heightImg = heightImg;
+var densityImg = densImg.rename('density');
+var coverImg = coverImg;
+
+// Feature engineering
+var combo4Features = [
+  'MeanHeight', 'population', 'density', 'BuiCover',
+  'lc_10', 'lc_20', 'lc_30', 'lc_40', 'lc_50', 'lc_60', 'lc_80'
+];
+
+// Restricting the scope of reasoning to the central city
+var coreDistricts = districts.filter(ee.Filter.inList('ENG_NAME',[
+  'Tianhe', 'Yuexiu', 'Haizhu', 'Liwan', 'Baiyun', 'Huangpu'
+]));
+
+// Base feature image
+var featureImg = ee.Image.cat([
+  heightImg,
+  populationImg,
+  densityImg,
+  coverImg,
+  landcoverImg.eq(10).rename('lc_10'),
+  landcoverImg.eq(20).rename('lc_20'),
+  landcoverImg.eq(30).rename('lc_30'),
+  landcoverImg.eq(40).rename('lc_40'),
+  landcoverImg.eq(50).rename('lc_50'),
+  landcoverImg.eq(60).rename('lc_60'),
+  landcoverImg.eq(80).rename('lc_80'),
+  co2Images[defaultYear].rename('RASTERVALU') 
+]);
+
+// Training Random Forests
+var samples = featureImg.sample({
+  region: coreDistricts.geometry(),
+  scale: 1000,
+  numPixels: 2000,
+  seed: 42,
+  geometries: true
+}).filter(ee.Filter.notNull(combo4Features));
+
+var rf = ee.Classifier.smileRandomForest(100)
+  .setOutputMode('REGRESSION')
+  .train({
+    features: samples,
+    classProperty: 'RASTERVALU',
+    inputProperties: combo4Features
+  });
+
+// Predict raw baseline
+var baselinePred = featureImg.select(combo4Features).classify(rf);
+
+// // Define labels for each study region.
+// var COLO = 'Colorado River Delta',
+//     NILE = 'Nile River Delta',
+//     BETS = 'Betsiboka River Delta'
+ 
+// /*
+// Select Area of INTEREST
+// */
+ 
+// // Define the select button for the AOI
+// var selectAoi = ui.Select({
+//   items:[COLO,NILE,BETS],
+//   placeholder:'Select area of interest',
+//   });
+
+// --- 选择情景的下拉框
+var scenarioSelect = ui.Select({
+  items: [
+    'Built-up ➔ Greenplace (20%)',
+    'Bare ➔ Built-up (20%)',
+    'Cropland ➔ Forest (50%)',
+  ],
+  style: {
+    stretch: 'horizontal',
+    fontWeight: 'bold',
+    fontSize: '14px'
+  }
+});
+
+// --- Decrease和Increase动态Label ---
+var decreaseLabel = ui.Label({
+  value: '🟦 Decrease in CO₂：0%',
+  style: {fontSize: '12px', margin: '8px 0 0 0'}
+});
+
+var increaseLabel = ui.Label({
+  value: '🟥 Increase in CO₂：0%',
+  style: {fontSize: '12px', margin: '2px 0 0 0'}
+});
+
+// --- Apply按钮 ---
+var applyButton = ui.Button({
+  label: 'Apply Change & Predict',
+  style: {stretch: 'horizontal', fontWeight: 'bold'},
+  onClick: function() {
+    var selected = scenarioSelect.getValue();
+    var percentage;
+    var modifiedLandcover = landcoverImg;
+    
+    // 根据选项决定改多少比例
+    if (selected === 'Built-up ➔ Greenplace (20%)') {
+      percentage = 0.2;
+      modifiedLandcover = landcoverImg.where(
+        landcoverImg.eq(50).and(ee.Image.random().lt(percentage)),
+        10
+      );
+    }
+    if (selected === 'Bare ➔ Built-up (20%)') {
+      percentage = 0.2;
+      modifiedLandcover = landcoverImg.where(
+        landcoverImg.eq(40).and(ee.Image.random().lt(percentage)),
+        50
+      );
+    }
+    if (selected === 'Cropland ➔ Forest (50%)') {
+      percentage = 0.5;
+      modifiedLandcover = landcoverImg.where(
+        landcoverImg.eq(60).and(ee.Image.random().lt(percentage)),
+        20
+      );
+    }
+
+    var newFeatureImg = ee.Image.cat([
+      heightImg,
+      populationImg,
+      densityImg,
+      coverImg,
+      modifiedLandcover.eq(10).rename('lc_10'),
+      modifiedLandcover.eq(20).rename('lc_20'),
+      modifiedLandcover.eq(30).rename('lc_30'),
+      modifiedLandcover.eq(40).rename('lc_40'),
+      modifiedLandcover.eq(50).rename('lc_50'),
+      modifiedLandcover.eq(60).rename('lc_60'),
+      modifiedLandcover.eq(80).rename('lc_80')
+    ]);
+
+    var newPred = newFeatureImg.select(combo4Features).classify(rf);
+    var diff = newPred.subtract(baselinePred);
+
+    Map.addLayer(diff.clip(coreDistricts), {
+      min: -100, max: 100,
+      palette: ['blue', 'white', 'red']
+    }, 'CO₂ Change: ' + selected);
+
+    var stats = diff.reduceRegion({
+      reducer: ee.Reducer.frequencyHistogram(),
+      geometry: coreDistricts.geometry(),
+      scale: 30,
+      maxPixels: 1e13
+    });
+
+    stats.evaluate(function(histogram) {
+      if (!histogram) {
+        decreaseLabel.setValue('🟦 Decrease in CO₂：No data');
+        increaseLabel.setValue('🟥 Increase in CO₂：No data');
+        return;
+      }
+      var counts = histogram['classification'];
+      var total = 0;
+      var increase = 0;
+      var decrease = 0;
+      
+      for (var value in counts) {
+        var numPixels = counts[value];
+        total += numPixels;
+        if (parseFloat(value) > 0) increase += numPixels;
+        if (parseFloat(value) < 0) decrease += numPixels;
+      }
+      
+      var increasePercent = (increase / total * 100).toFixed(2);
+      var decreasePercent = (decrease / total * 100).toFixed(2);
+      
+      decreaseLabel.setValue('🟦 Decrease in CO₂：' + decreasePercent + '%');
+      increaseLabel.setValue('🟥 Increase in CO₂：' + increasePercent + '%');
+    });
+  }
+});
+
+// --- 组合成一个Panel ---
+var predictPanel = ui.Panel({
+  widgets: [
+    ui.Label('Fixed Landcover Change Prediction', {
+      fontWeight: 'bold',
+      fontSize: '16px',
+      margin: '0 0 6px 0'
+    }),
+    scenarioSelect,
+    applyButton,
+    decreaseLabel,
+    increaseLabel,
+    ui.Label('(Based on Random Forest Regression Model)', {
+      fontSize: '10px',
+      margin: '4px 0 0 0',
+      color: 'gray'
+    })
+  ],
+  style: {
+    position: 'top-right',
+    margin: '470px 10px 0 0',
+    padding: '10px',
+    width: '360px',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    border: '1px solid #ccc',
+    borderRadius: '8px'
+  }
+});
+Map.add(predictPanel);
