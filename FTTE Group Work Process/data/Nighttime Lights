@@ -1,0 +1,35 @@
+// 1. Load the boundary of Guangzhou
+var guangzhou = ee.FeatureCollection('users/marshhiiiiii/GZBoundary');
+
+// 2. Load the VIIRS nighttime light (monthly average radiation value) dataset
+var viirs = ee.ImageCollection('NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG')
+  .filterBounds(guangzhou)
+  .filterDate('2023-01-01', '2023-12-31')
+  .select('avg_rad');  // avg_rad refers to the band of light intensity
+
+// 3. Calculate the average nighttime light intensity for the year 2023
+var ntl2023 = viirs.mean().clip(guangzhou);
+
+// 4. Set the center of the map
+Map.centerObject(guangzhou, 9);
+
+// 5. Visual parameters
+var visParams = {
+  min: 0,
+  max: 60,
+  palette: ['000000', '0f0f50', '3777ff', 'ffffff'] // The gradual change from dark to light
+};
+
+// 6. Load onto the map
+Map.addLayer(ntl2023, visParams, 'Average nighttime lights in 2023');
+
+// 7. Export image
+Export.image.toDrive({
+  image: ntl2023,
+  description: 'Guangzhou_NTL_2023',
+  folder: 'GEEExports',
+  region: guangzhou.geometry(),
+  scale: 100,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
