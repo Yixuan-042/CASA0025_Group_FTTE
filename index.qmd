@@ -113,7 +113,7 @@ selector.onChange(function(key) { ... });
 Map.onClick(function(coords) { ... });
 ```
 
-#### Thematic Layers and Interaction
+#### Layer and Legend Management
 
 Administrative boundary layer always on top
 Land cover map: 7 categories of land based on training outputs
