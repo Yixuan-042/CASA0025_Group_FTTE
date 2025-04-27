@@ -1,0 +1,628 @@
+https://code.earthengine.google.com/4795e1205c800e173c7610588e3e4878
+
+// ==============================
+// 1. 导入数据
+// ==============================
+var co2 = ee.FeatureCollection('projects/ee-71magicsong/assets/CO2_guangzhou');
+var ntl = ee.FeatureCollection('projects/ee-71magicsong/assets/NTL_guangzhou');
+var landcover = ee.FeatureCollection('projects/ee-71magicsong/assets/landcover_guangzhou');
+var population = ee.FeatureCollection('projects/ee-71magicsong/assets/population_guangzhou');
+var buildingGrid = ee.FeatureCollection('users/marshhiiiiii/BuildingGrid');
+var roi = co2;
+
+// 检查原始数据点数量
+print('原始CO2数据点数量:', co2.size());
+print('原始NTL数据点数量:', ntl.size());
+print('原始土地覆盖数据点数量:', landcover.size());
+print('原始人口数据点数量:', population.size());
+
+// 在地图上展示研究区域
+Map.addLayer(roi, {}, '研究区域');
+Map.centerObject(roi);
+
+// ==============================
+// 2. 矢量转栅格
+// ==============================
+
+// 将矢量数据转换为栅格图像
+var co2_img = co2.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('co2');
+
+var landcover_img = landcover.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('landcover');
+
+var population_img = population.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('population');
+
+var ntl_img = ntl.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('ntl');
+
+var height_img = buildingGrid.reduceToImage({
+  properties: ['MeanHeight'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('MeanHeight');
+
+var cover_img = buildingGrid.reduceToImage({
+  properties: ['BuiCover'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('BuiCover');
+
+var density_img = buildingGrid.reduceToImage({
+  properties: ['BuiDensity'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('BuiDensity');
+
+// ==============================
+// 3. 特征工程：土地覆盖虚拟变量和特征归一化
+// ==============================
+
+// 方法1：直接使用预定义的土地覆盖类型值
+var landcoverClasses = [10, 20, 30, 40, 50, 60, 80]; 
+
+// 创建土地覆盖类型的虚拟变量图像
+var dummyBands = [];
+for (var i = 0; i < landcoverClasses.length; i++) { 
+  var classValue = landcoverClasses[i];
+  var dummyBand = landcover_img.eq(ee.Number(classValue)).rename('lc_' + classValue);
+  dummyBands.push(dummyBand);
+}
+
+// 将所有虚拟变量合并为一个多波段图像
+var landcover_dummy = ee.Image.cat(dummyBands);
+
+// 计算用于归一化的统计数据 - 使用一次reduceRegion调用来提高效率
+var allStats = ee.Image.cat([
+  population_img.rename('population'),
+  ntl_img.rename('ntl'),
+  height_img.rename('MeanHeight'),
+  cover_img.rename('BuiCover'),
+  density_img.rename('BuiDensity')
+]).reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: roi.geometry(),
+  scale: 1000,
+  maxPixels: 1e13,
+  bestEffort: true  // 添加bestEffort参数以避免计算超时
+});
+
+// 执行特征归一化
+var population_norm = population_img
+  .subtract(ee.Number(allStats.get('population_min')))
+  .divide(ee.Number(allStats.get('population_max')).subtract(ee.Number(allStats.get('population_min'))))
+  .rename('population_norm');
+
+var ntl_norm = ntl_img
+  .subtract(ee.Number(allStats.get('ntl_min')))
+  .divide(ee.Number(allStats.get('ntl_max')).subtract(ee.Number(allStats.get('ntl_min'))))
+  .rename('ntl_norm');
+
+var height_norm = height_img
+  .subtract(ee.Number(allStats.get('MeanHeight_min')))
+  .divide(ee.Number(allStats.get('MeanHeight_max')).subtract(ee.Number(allStats.get('MeanHeight_min'))))
+  .rename('height_norm');
+
+var cover_norm = cover_img
+  .subtract(ee.Number(allStats.get('BuiCover_min')))
+  .divide(ee.Number(allStats.get('BuiCover_max')).subtract(ee.Number(allStats.get('BuiCover_min'))))
+  .rename('cover_norm');
+
+var density_norm = density_img
+  .subtract(ee.Number(allStats.get('BuiDensity_min')))
+  .divide(ee.Number(allStats.get('BuiDensity_max')).subtract(ee.Number(allStats.get('BuiDensity_min'))))
+  .rename('density_norm');
+
+// 合并所有特征图像
+var com_img = ee.Image.cat([
+  landcover_dummy, 
+  population_norm, 
+  ntl_norm, 
+  height_norm, 
+  cover_norm, 
+  density_norm
+]);
+
+// ==============================
+// 4. 计算每个网格的特征值（用于训练）- 优化版
+// ==============================
+
+// 限制处理的样本数量，避免内存溢出
+var sampleSize = 1000;  // 根据您的需求调整
+var co2Sample = co2;
+if (co2.size().getInfo() > sampleSize) {
+  co2Sample = co2.randomColumn('random_select').filter(ee.Filter.lt('random_select', sampleSize / co2.size().getInfo()));
+}
+
+// 创建初始特征集合（未过滤）
+var initial_class_fea = co2Sample.map(function(fea) {
+  // 对每个网格提取特征值
+  var stats = com_img.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: fea.geometry(),
+    scale: 1000,
+    crs: 'EPSG:4326',
+    maxPixels: 1e13,
+    bestEffort: true  // 添加bestEffort参数
+  });
+  
+  // 获取CO2值作为目标变量
+  var co2Value = fea.get('RASTERVALU');
+  
+  // 将统计结果和CO2值设为属性返回
+  return fea.set(stats).set('co2_value', co2Value);
+});
+
+// 过滤掉无效值
+var class_fea = initial_class_fea.filter(ee.Filter.and(
+  ee.Filter.notNull(['ntl_norm']),
+  ee.Filter.notNull(['height_norm']),
+  ee.Filter.notNull(['cover_norm'])
+));
+
+// ==============================
+// 6. 准备训练和测试数据
+// ==============================
+
+// 随机分割训练集和测试集
+var split = 0.7;  // 70%用于训练，30%用于测试
+var withRandom = class_fea.randomColumn('random');
+var trainingSet = withRandom.filter(ee.Filter.lt('random', split));
+var testingSet = withRandom.filter(ee.Filter.gte('random', split));
+
+print('训练集样本数量:', trainingSet.size());
+print('测试集样本数量:', testingSet.size());
+
+// ==============================
+// 7. 随机森林回归训练
+// ==============================
+
+// 使用随机森林进行回归建模（使用所有特征）
+// 在合并特征图像之后定义bandNames
+var bandNames = com_img.bandNames();
+
+// 打印bandNames以确认包含的特征
+print('用于模型训练的特征名称:', bandNames);
+var allFeaturesRF = ee.Classifier.smileRandomForest(200)
+  .setOutputMode('REGRESSION')
+  .train({
+    features: trainingSet,
+    classProperty: "RASTERVALU",
+    inputProperties: bandNames
+  });
+
+// 使用训练好的模型对图像进行预测
+var predictedImageAll = com_img.classify(allFeaturesRF)
+  .clip(roi)
+  .float()
+  .rename('predicted_all');
+
+// 显示预测结果图像
+var visParams = {
+  min: 0,
+  max: ee.Number(co2.aggregate_mean('RASTERVALU')).multiply(2).getInfo(),
+  palette: ['blue', 'cyan', 'green', 'yellow', 'orange', 'red']
+};
+
+Map.addLayer(co2_img, visParams, '实际CO2排放');
+Map.addLayer(predictedImageAll, visParams, '预测CO2排放(所有特征)');
+
+// ==============================
+// 8. 模型评估
+// ==============================
+
+// 对测试集进行预测
+var testPredictAll = testingSet.classify(allFeaturesRF, 'predicted_all');
+
+// 计算所有特征模型的R²和RMSE
+var allFeaturesStats = testPredictAll.reduceColumns({
+  reducer: ee.Reducer.pearsonsCorrelation(),
+  selectors: ['RASTERVALU', 'predicted_all']
+});
+
+var allFeaturesRMSE = testPredictAll.map(function(feature) {
+  var diff = ee.Number(feature.get('RASTERVALU')).subtract(ee.Number(feature.get('predicted_all')));
+  return feature.set('diff_sq', diff.pow(2));
+}).reduceColumns({
+  reducer: ee.Reducer.mean(),
+  selectors: ['diff_sq']
+});
+
+// 输出评估结果
+print('所有特征模型 - R:', allFeaturesStats.get('correlation'));
+print('所有特征模型 - R²:', ee.Number(allFeaturesStats.get('correlation')).pow(2));
+print('所有特征模型 - RMSE:', ee.Number(allFeaturesRMSE.get('mean')).sqrt());
+
+// ==============================
+// 10. 六种不同自变量组合的随机森林分析
+// ==============================
+
+// 定义六种不同的自变量组合
+var combo1Features = ['height_norm', 'population_norm', 'density_norm', 'lc_10', 'lc_50', 'lc_40', 'lc_80'];
+var combo2Features = ['height_norm', 'ntl_norm', 'density_norm', 'lc_10', 'lc_50', 'lc_40', 'lc_80'];
+var combo3Features = ['height_norm', 'cover_norm', 'density_norm', 'lc_10', 'lc_50', 'lc_40', 'lc_80'];
+var combo4Features = ['height_norm', 'population_norm', 'density_norm', 'lc_10', 'lc_20', 'lc_30', 'lc_50', 'lc_40', 'lc_60', 'lc_80'];
+var combo5Features = ['height_norm', 'ntl_norm', 'density_norm', 'lc_10', 'lc_20', 'lc_30', 'lc_50', 'lc_40', 'lc_60', 'lc_80'];
+var combo6Features = ['height_norm', 'cover_norm', 'density_norm', 'lc_10', 'lc_20', 'lc_30', 'lc_50', 'lc_40', 'lc_60', 'lc_80'];
+
+print('组合1特征:', combo1Features);
+print('组合2特征:', combo2Features);
+print('组合3特征:', combo3Features);
+print('组合4特征:', combo4Features);
+print('组合5特征:', combo5Features);
+print('组合6特征:', combo6Features);
+
+// ==============================
+// 10.1 组合1的随机森林模型
+// ==============================
+
+// 训练组合1的随机森林模型
+var combo1RF = ee.Classifier.smileRandomForest(200)
+  .setOutputMode('REGRESSION')
+  .train({
+    features: trainingSet,
+    classProperty: "RASTERVALU",
+    inputProperties: combo1Features
+  });
+
+// 使用组合1模型对图像进行预测
+var predictedImageCombo1 = com_img.select(combo1Features).classify(combo1RF)
+  .clip(roi)
+  .float()
+  .rename('predicted_combo1');
+
+// 显示组合1预测结果
+Map.addLayer(predictedImageCombo1, visParams, '预测CO2排放(组合1)');
+
+// 对测试集进行组合1预测
+var testPredictCombo1 = testingSet.classify(combo1RF, 'predicted_combo1');
+
+// 计算组合1模型的R²和RMSE
+var combo1Stats = testPredictCombo1.reduceColumns({
+  reducer: ee.Reducer.pearsonsCorrelation(),
+  selectors: ['RASTERVALU', 'predicted_combo1']
+});
+
+var combo1RMSE = testPredictCombo1.map(function(feature) {
+  var diff = ee.Number(feature.get('RASTERVALU')).subtract(ee.Number(feature.get('predicted_combo1')));
+  return feature.set('diff_sq', diff.pow(2));
+}).reduceColumns({
+  reducer: ee.Reducer.mean(),
+  selectors: ['diff_sq']
+});
+
+// 输出组合1评估结果
+print('组合1模型 - R:', combo1Stats.get('correlation'));
+print('组合1模型 - R²:', ee.Number(combo1Stats.get('correlation')).pow(2));
+print('组合1模型 - RMSE:', ee.Number(combo1RMSE.get('mean')).sqrt());
+
+// ==============================
+// 10.2 组合2的随机森林模型
+// ==============================
+
+// 训练组合2的随机森林模型
+var combo2RF = ee.Classifier.smileRandomForest(200)
+  .setOutputMode('REGRESSION')
+  .train({
+    features: trainingSet,
+    classProperty: "RASTERVALU",
+    inputProperties: combo2Features
+  });
+
+// 使用组合2模型对图像进行预测
+var predictedImageCombo2 = com_img.select(combo2Features).classify(combo2RF)
+  .clip(roi)
+  .float()
+  .rename('predicted_combo2');
+
+// 显示组合2预测结果
+Map.addLayer(predictedImageCombo2, visParams, '预测CO2排放(组合2)');
+
+// 对测试集进行组合2预测
+var testPredictCombo2 = testingSet.classify(combo2RF, 'predicted_combo2');
+
+// 计算组合2模型的R²和RMSE
+var combo2Stats = testPredictCombo2.reduceColumns({
+  reducer: ee.Reducer.pearsonsCorrelation(),
+  selectors: ['RASTERVALU', 'predicted_combo2']
+});
+
+var combo2RMSE = testPredictCombo2.map(function(feature) {
+  var diff = ee.Number(feature.get('RASTERVALU')).subtract(ee.Number(feature.get('predicted_combo2')));
+  return feature.set('diff_sq', diff.pow(2));
+}).reduceColumns({
+  reducer: ee.Reducer.mean(),
+  selectors: ['diff_sq']
+});
+
+// 输出组合2评估结果
+print('组合2模型 - R:', combo2Stats.get('correlation'));
+print('组合2模型 - R²:', ee.Number(combo2Stats.get('correlation')).pow(2));
+print('组合2模型 - RMSE:', ee.Number(combo2RMSE.get('mean')).sqrt());
+
+// ==============================
+// 10.3 组合3的随机森林模型
+// ==============================
+
+// 训练组合3的随机森林模型
+var combo3RF = ee.Classifier.smileRandomForest(200)
+  .setOutputMode('REGRESSION')
+  .train({
+    features: trainingSet,
+    classProperty: "RASTERVALU",
+    inputProperties: combo3Features
+  });
+
+// 使用组合3模型对图像进行预测
+var predictedImageCombo3 = com_img.select(combo3Features).classify(combo3RF)
+  .clip(roi)
+  .float()
+  .rename('predicted_combo3');
+
+// 显示组合3预测结果
+Map.addLayer(predictedImageCombo3, visParams, '预测CO2排放(组合3)');
+
+// 对测试集进行组合3预测
+var testPredictCombo3 = testingSet.classify(combo3RF, 'predicted_combo3');
+
+// 计算组合3模型的R²和RMSE
+var combo3Stats = testPredictCombo3.reduceColumns({
+  reducer: ee.Reducer.pearsonsCorrelation(),
+  selectors: ['RASTERVALU', 'predicted_combo3']
+});
+
+var combo3RMSE = testPredictCombo3.map(function(feature) {
+  var diff = ee.Number(feature.get('RASTERVALU')).subtract(ee.Number(feature.get('predicted_combo3')));
+  return feature.set('diff_sq', diff.pow(2));
+}).reduceColumns({
+  reducer: ee.Reducer.mean(),
+  selectors: ['diff_sq']
+});
+
+// 输出组合3评估结果
+print('组合3模型 - R:', combo3Stats.get('correlation'));
+print('组合3模型 - R²:', ee.Number(combo3Stats.get('correlation')).pow(2));
+print('组合3模型 - RMSE:', ee.Number(combo3RMSE.get('mean')).sqrt());
+
+// ==============================
+// 10.4 组合4的随机森林模型
+// ==============================
+
+// 训练组合4的随机森林模型
+var combo4RF = ee.Classifier.smileRandomForest(200)
+  .setOutputMode('REGRESSION')
+  .train({
+    features: trainingSet,
+    classProperty: "RASTERVALU",
+    inputProperties: combo4Features
+  });
+
+// 使用组合4模型对图像进行预测
+var predictedImageCombo4 = com_img.select(combo4Features).classify(combo4RF)
+  .clip(roi)
+  .float()
+  .rename('predicted_combo4');
+
+// 显示组合4预测结果
+Map.addLayer(predictedImageCombo4, visParams, '预测CO2排放(组合4)');
+
+// 对测试集进行组合4预测
+var testPredictCombo4 = testingSet.classify(combo4RF, 'predicted_combo4');
+
+// 计算组合4模型的R²和RMSE
+var combo4Stats = testPredictCombo4.reduceColumns({
+  reducer: ee.Reducer.pearsonsCorrelation(),
+  selectors: ['RASTERVALU', 'predicted_combo4']
+});
+
+var combo4RMSE = testPredictCombo4.map(function(feature) {
+  var diff = ee.Number(feature.get('RASTERVALU')).subtract(ee.Number(feature.get('predicted_combo4')));
+  return feature.set('diff_sq', diff.pow(2));
+}).reduceColumns({
+  reducer: ee.Reducer.mean(),
+  selectors: ['diff_sq']
+});
+
+// 输出组合4评估结果
+print('组合4模型 - R:', combo4Stats.get('correlation'));
+print('组合4模型 - R²:', ee.Number(combo4Stats.get('correlation')).pow(2));
+print('组合4模型 - RMSE:', ee.Number(combo4RMSE.get('mean')).sqrt());
+
+// ==============================
+// 10.5 组合5的随机森林模型
+// ==============================
+
+// 训练组合5的随机森林模型
+var combo5RF = ee.Classifier.smileRandomForest(200)
+  .setOutputMode('REGRESSION')
+  .train({
+    features: trainingSet,
+    classProperty: "RASTERVALU",
+    inputProperties: combo5Features
+  });
+
+// 使用组合5模型对图像进行预测
+var predictedImageCombo5 = com_img.select(combo5Features).classify(combo5RF)
+  .clip(roi)
+  .float()
+  .rename('predicted_combo5');
+
+// 显示组合5预测结果
+Map.addLayer(predictedImageCombo5, visParams, '预测CO2排放(组合5)');
+
+// 对测试集进行组合5预测
+var testPredictCombo5 = testingSet.classify(combo5RF, 'predicted_combo5');
+
+// 计算组合5模型的R²和RMSE
+var combo5Stats = testPredictCombo5.reduceColumns({
+  reducer: ee.Reducer.pearsonsCorrelation(),
+  selectors: ['RASTERVALU', 'predicted_combo5']
+});
+
+var combo5RMSE = testPredictCombo5.map(function(feature) {
+  var diff = ee.Number(feature.get('RASTERVALU')).subtract(ee.Number(feature.get('predicted_combo5')));
+  return feature.set('diff_sq', diff.pow(2));
+}).reduceColumns({
+  reducer: ee.Reducer.mean(),
+  selectors: ['diff_sq']
+});
+
+// 输出组合5评估结果
+print('组合5模型 - R:', combo5Stats.get('correlation'));
+print('组合5模型 - R²:', ee.Number(combo5Stats.get('correlation')).pow(2));
+print('组合5模型 - RMSE:', ee.Number(combo5RMSE.get('mean')).sqrt());
+
+// ==============================
+// 10.6 组合6的随机森林模型
+// ==============================
+
+// 训练组合6的随机森林模型
+var combo6RF = ee.Classifier.smileRandomForest(200)
+  .setOutputMode('REGRESSION')
+  .train({
+    features: trainingSet,
+    classProperty: "RASTERVALU",
+    inputProperties: combo6Features
+  });
+
+// 使用组合6模型对图像进行预测
+var predictedImageCombo6 = com_img.select(combo6Features).classify(combo6RF)
+  .clip(roi)
+  .float()
+  .rename('predicted_combo6');
+
+// 显示组合6预测结果
+Map.addLayer(predictedImageCombo6, visParams, '预测CO2排放(组合6)');
+
+// 对测试集进行组合6预测
+var testPredictCombo6 = testingSet.classify(combo6RF, 'predicted_combo6');
+
+// 计算组合6模型的R²和RMSE
+var combo6Stats = testPredictCombo6.reduceColumns({
+  reducer: ee.Reducer.pearsonsCorrelation(),
+  selectors: ['RASTERVALU', 'predicted_combo6']
+});
+
+var combo6RMSE = testPredictCombo6.map(function(feature) {
+  var diff = ee.Number(feature.get('RASTERVALU')).subtract(ee.Number(feature.get('predicted_combo6')));
+  return feature.set('diff_sq', diff.pow(2));
+}).reduceColumns({
+  reducer: ee.Reducer.mean(),
+  selectors: ['diff_sq']
+});
+
+// 输出组合6评估结果
+print('组合6模型 - R:', combo6Stats.get('correlation'));
+print('组合6模型 - R²:', ee.Number(combo6Stats.get('correlation')).pow(2));
+print('组合6模型 - RMSE:', ee.Number(combo6RMSE.get('mean')).sqrt());
+
+// ==============================
+// 11. 导出所有模型评估结果
+// ==============================
+
+// 导出模型评估结果
+var evaluationResults = ee.FeatureCollection([
+  ee.Feature(null, {
+    'model': 'All Features',
+    'R': allFeaturesStats.get('correlation'),
+    'R_squared': ee.Number(allFeaturesStats.get('correlation')).pow(2),
+    'RMSE': ee.Number(allFeaturesRMSE.get('mean')).sqrt(),
+    'features_used': bandNames.size()
+  }),
+  ee.Feature(null, {
+    'model': 'Combo1 (height_norm, population_norm, density_norm, lc_10, lc_50, lc_40, lc_80)',
+    'R': combo1Stats.get('correlation'),
+    'R_squared': ee.Number(combo1Stats.get('correlation')).pow(2),
+    'RMSE': ee.Number(combo1RMSE.get('mean')).sqrt(),
+    'features_used': combo1Features.length
+  }),
+  ee.Feature(null, {
+    'model': 'Combo2 (height_norm, ntl_norm, density_norm, lc_10, lc_50, lc_40, lc_80)',
+    'R': combo2Stats.get('correlation'),
+    'R_squared': ee.Number(combo2Stats.get('correlation')).pow(2),
+    'RMSE': ee.Number(combo2RMSE.get('mean')).sqrt(),
+    'features_used': combo2Features.length
+  }),
+  ee.Feature(null, {
+    'model': 'Combo3 (height_norm, cover_norm, density_norm, lc_10, lc_50, lc_40, lc_80)',
+    'R': combo3Stats.get('correlation'),
+    'R_squared': ee.Number(combo3Stats.get('correlation')).pow(2),
+    'RMSE': ee.Number(combo3RMSE.get('mean')).sqrt(),
+    'features_used': combo3Features.length
+  }),
+  ee.Feature(null, {
+    'model': 'Combo4 (height_norm, population_norm, density_norm, lc_10, lc_20, lc_30, lc_50, lc_40, lc_60, lc_80)',
+    'R': combo4Stats.get('correlation'),
+    'R_squared': ee.Number(combo4Stats.get('correlation')).pow(2),
+    'RMSE': ee.Number(combo4RMSE.get('mean')).sqrt(),
+    'features_used': combo4Features.length
+  }),
+  ee.Feature(null, {
+    'model': 'Combo5 (height_norm, ntl_norm, density_norm, lc_10, lc_20, lc_30, lc_50, lc_40, lc_60, lc_80)',
+    'R': combo5Stats.get('correlation'),
+    'R_squared': ee.Number(combo5Stats.get('correlation')).pow(2),
+    'RMSE': ee.Number(combo5RMSE.get('mean')).sqrt(),
+    'features_used': combo5Features.length
+  }),
+  ee.Feature(null, {
+    'model': 'Combo6 (height_norm, cover_norm, density_norm, lc_10, lc_20, lc_30, lc_50, lc_40, lc_60, lc_80)',
+    'R': combo6Stats.get('correlation'),
+    'R_squared': ee.Number(combo6Stats.get('correlation')).pow(2),
+    'RMSE': ee.Number(combo6RMSE.get('mean')).sqrt(),
+    'features_used': combo6Features.length
+  })
+]);
+
+Export.table.toDrive({
+  collection: evaluationResults,
+  description: 'Model_Evaluation_Results_All_Combos',
+  fileFormat: 'CSV'
+});
+
+// 导出训练数据
+Export.table.toDrive({
+  collection: class_fea,
+  description: 'Training_Data_With_Features',
+  fileFormat: 'CSV'
+});
+
+// 导出预测结果 - 选择性能最佳的模型
+// 这里我们导出每个模型的预测结果
+Export.image.toDrive({
+  image: predictedImageAll,
+  description: 'CO2_Prediction_Map_All_Features',
+  scale: 1000,
+  region: roi.geometry(),
+  fileFormat: 'GeoTIFF'
+});
+
+Export.image.toDrive({
+  image: predictedImageCombo1,
+  description: 'CO2_Prediction_Map_Combo1',
+  scale: 1000,
+  region: roi.geometry(),
+  fileFormat: 'GeoTIFF'
+});
+
+Export.image.toDrive({
+  image: predictedImageCombo2,
+  description: 'CO2_Prediction_Map_Combo2',
+  scale: 1000,
+  region: roi.geometry(),
+  fileFormat: 'GeoTIFF'
+});
+
+Export.image.toD
