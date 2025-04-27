@@ -1,0 +1,123 @@
+// 1. Load the administrative boundaries of Guangzhou.
+var guangzhou = ee.FeatureCollection('users/marshhiiiiii/GZBoundary');
+
+// 2. Load the ESA WorldCover 2021 classification data (to be used as training labels)
+var esa = ee.ImageCollection('ESA/WorldCover/v100')
+             .first()
+             .select('Map')
+             .clip(guangzhou);
+
+// 3. Load Landsat 9 SR data
+var landsat9 = ee.ImageCollection('LANDSAT/LC09/C02/T1_L2')
+  .filterBounds(guangzhou)
+  .filterDate('2023-01-01', '2023-12-31')
+  .filter(ee.Filter.lt('CLOUD_COVER', 10))
+  .map(function(image) {
+    var cloudMask = image.select('QA_PIXEL').bitwiseAnd(1 << 3).eq(0);
+    return image.updateMask(cloudMask)
+                .select(['SR_B2','SR_B3','SR_B4','SR_B5','SR_B6','SR_B7'])
+                .divide(10000)
+                .copyProperties(image, ['system:time_start']);
+  });
+
+// 4. Synthesize annual images
+var composite = landsat9.median().clip(guangzhou);
+
+// 5. Create training samples (using the pixels of ESA data)
+var trainingSamples = composite.addBands(esa).sample({
+  region: guangzhou.geometry(),
+  scale: 30,
+  numPixels: 5000,
+  seed: 42,
+  geometries: true
+});
+
+// 6. Training classifier
+var classifier = ee.Classifier.smileRandomForest(50).train({
+  features: trainingSamples,
+  classProperty: 'Map',
+  inputProperties: composite.bandNames()
+});
+
+// 7. Carry out classification
+var classified = composite.classify(classifier);
+
+// 8. Visualization
+Map.centerObject(guangzhou, 9);
+Map.addLayer(classified, {
+  min: 10,
+  max: 100,
+  palette: [
+    '006400', // Tree
+    'ffbb22', // Grassland
+    'ffff4c', // Cropland
+    'f096ff', // Wetland
+    'fa0000', // Urban
+    'b4b4b4', // Barren land
+    'f0f0f0', // Snow and ice
+    '0032c8', // Water body
+    '0096a0', // Coastal wetland
+    '00cf75', // Marsh
+    'fae6a0'  // Cultivable but uncultivated land
+  ]
+}, 'Land Cover by Landsat9 + ESA');
+
+// 9. Exported results
+Export.image.toDrive({
+  image: classified,
+  description: 'Landsat9_GZ_ESA_LandCover',
+  folder: 'GEEExports',
+  fileNamePrefix: 'guangzhou_landcover_2023_rf',
+  region: guangzhou.geometry(),
+  scale: 30,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// === Create legend component ===
+var legend = ui.Panel({
+  style: {
+    position: 'bottom-right',
+    padding: '8px 15px'
+  }
+});
+
+legend.add(ui.Label({
+  value: 'ESA WorldCover 图例',
+  style: {fontWeight: 'bold', fontSize: '14px', margin: '0 0 6px 0'}
+}));
+
+// 10. Legend item list: Color + Label
+var legendItems = [
+  {color: '#006400', label: '10 Tree'},
+  {color: '#ffbb22', label: '20 Shrubland'},
+  {color: '#ffff4c', label: '30 Grassland'},
+  {color: '#f096ff', label: '40 Cropland'},
+  {color: '#fa0000', label: '50 Urban area'},
+  {color: '#b4b4b4', label: '60 Barren land'},
+  {color: '#f0f0f0', label: '70 Snow/Ice'},
+  {color: '#0032c8', label: '80 Water body'},
+  {color: '#0096a0', label: '90 Herbaceous wetland'},
+  {color: '#00cf75', label: '95 Mangrove'},
+  {color: '#fae6a0', label: '100 Cultivated and managed vegetation'}
+];
+
+// Add each legend
+legendItems.forEach(function(item) {
+  var colorBox = ui.Label('', {
+    backgroundColor: item.color,
+    padding: '8px',
+    margin: '0 8px 4px 0'
+  });
+  var description = ui.Label(item.label, {margin: '0 0 4px 0'});
+  
+  var legendItem = ui.Panel({
+    widgets: [colorBox, description],
+    layout: ui.Panel.Layout.Flow('horizontal')
+  });
+  
+  legend.add(legendItem);
+});
+
+// Add legends to the map interface
+Map.add(legend);
