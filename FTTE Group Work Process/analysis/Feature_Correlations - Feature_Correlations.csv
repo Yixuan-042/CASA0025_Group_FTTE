@@ -1,0 +1,12 @@
+system:index,correlation,correlation_abs,feature,.geo
+6,0.1284943115,0.1284943115,population_norm,"{""type"":""MultiPoint"",""coordinates"":[]}"
+0,-0.09101993759,0.09101993759,lc_10,"{""type"":""MultiPoint"",""coordinates"":[]}"
+7,0.07250051257,0.07250051257,ntl_norm,"{""type"":""MultiPoint"",""coordinates"":[]}"
+3,0.06302075095,0.06302075095,lc_50,"{""type"":""MultiPoint"",""coordinates"":[]}"
+2,0.06148394162,0.06148394162,lc_40,"{""type"":""MultiPoint"",""coordinates"":[]}"
+9,0.05127242243,0.05127242243,cover_norm,"{""type"":""MultiPoint"",""coordinates"":[]}"
+4,-0.01526906234,0.01526906234,lc_60,"{""type"":""MultiPoint"",""coordinates"":[]}"
+10,-0.0145612407,0.0145612407,density_norm,"{""type"":""MultiPoint"",""coordinates"":[]}"
+8,-0.01379088192,0.01379088192,height_norm,"{""type"":""MultiPoint"",""coordinates"":[]}"
+5,-0.01118932426,0.01118932426,lc_80,"{""type"":""MultiPoint"",""coordinates"":[]}"
+1,-0.00703137059,0.00703137059,lc_30,"{""type"":""MultiPoint"",""coordinates"":[]}"
