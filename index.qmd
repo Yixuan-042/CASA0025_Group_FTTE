@@ -2,8 +2,6 @@
 
 ## Project Summary 
 
-Fill in the sections below to provide a brief summary of your project. Each section should have no more than 100 words. Do not edit any of the headings.
-
 ### Problem Statement 
 
 As the world's largest emitter of carbon dioxide (CO2), China faces significant challenges in addressing climate change. With cities contributing over 70% of global energy-related CO2 emissions, understanding urban emission patterns is crucial. We selected Guangzhou as our study area due to its economic significance in the Greater Bay Area, rapid urbanization, and diverse land use patterns. This application explores relationships between nighttime lights, population, land cover, and building characteristics with CO2 emissions to identify key emission drivers and support evidence-based carbon reduction policies in rapidly developing Chinese cities.
@@ -35,7 +33,6 @@ Data Preprocessing: Clip and project CO2 emissions, landcover types, urban build
 Model Construction: Use Random Forest machine learning with land cover types, urban building coverage, population, and nighttime light data as independent variables, and CO2 emissions as the dependent variable. Address multicollinearity by processing six landcover types, forming regression models for Guangzhou's administrative and built-up areas.
 Visualization and Prediction: Design layers to display CO2 emissions distribution. Utilize the fourth regression model to simulate urban densification impacts on emissions, adjusting landcover proportions to predict future CO2 levels.
 
-
 ### Interface
 
 This application provides urban planners and researchers with an intuitive interactive dashboard. Users can switch between thematic layers (population density, night lighting, architectural features, land cover, carbon dioxide emissions) through the drop-down menu and view detailed pixel-level information by clicking on the map. Dynamic charts can visually display the emission trends and spatial distribution of various regions. The prediction module enables users to simulate land cover changes and assess potential CO₂ impacts. The clarity and real-time interactivity of the interface enable decision-makers to explore the complex urban environmental relationships in Guangzhou and support targeted carbon reduction strategies.
@@ -50,8 +47,6 @@ Replace the link below with the link to your application.
 
 :::
 ## How it Works 
-
-Use this section to explain how your application works using code blocks and text explanations (no more than 500 words excluding code):
 
 ### Application Overview
 
