@@ -1,0 +1,103 @@
+// 1. Load building statistics data
+var buildingStats = ee.FeatureCollection('projects/ee-chenyixuan0402/assets/BuildingGrid0424');
+
+// 2. Create raster layers for three indicators
+var heightImage = buildingStats.reduceToImage({
+  properties: ['MeanHeight'],
+  reducer: ee.Reducer.first()
+}).rename('MeanHeight');
+
+var densityImage = buildingStats.reduceToImage({
+  properties: ['BuiDensity'],
+  reducer: ee.Reducer.first()
+}).rename('BuiDensity');
+
+var footprintImage = buildingStats.reduceToImage({
+  properties: ['BuiCover'],
+  reducer: ee.Reducer.first()
+}).rename('BuiCover');
+
+// 3. Visualization parameters for each layer
+var visParamsDict = {
+  'Average Building Height': {
+    image: heightImage,
+    vis: {min: 0, max: 80, palette: ['#ffffcc', '#fd8d3c', '#bd0026']},
+    units: 'meters'
+  },
+  'Building Density': {
+    image: densityImage,
+    vis: {min: 0, max: 1500, palette: ['#edf8fb', '#b2e2e2', '#66c2a4', '#238b45']},
+    units: 'floor area per building'
+  },
+  'Footprint Ratio': {
+    image: footprintImage,
+    vis: {min: 0, max: 1, palette: ['#f7fcf0', '#bae4bc', '#238b45']},
+    units: 'ratio'
+  }
+};
+
+// 4. Function to create a legend panel
+function createLegend(palette, min, max, title, units) {
+  var legend = ui.Panel({
+    style: {
+      position: 'bottom-left',
+      padding: '8px 15px',
+      backgroundColor: 'white'
+    }
+  });
+
+  legend.add(ui.Label({
+    value: title + ' (Unit: ' + units + ')',
+    style: {fontWeight: 'bold', margin: '0 0 4px 0'}
+  }));
+
+  var gradient = ui.Thumbnail({
+    image: ee.Image.pixelLonLat().select(0).multiply((max - min) / 100).add(min)
+              .visualize({min: min, max: max, palette: palette}),
+    params: {bbox: [0, 0, 100, 10], dimensions: '100x10'},
+    style: {stretch: 'horizontal', margin: '4px 0'}
+  });
+
+  var labels = ui.Panel({
+    layout: ui.Panel.Layout.flow('horizontal'),
+    widgets: [
+      ui.Label(min.toFixed(2), {margin: '0 8px'}),
+      ui.Label(((min + max) / 2).toFixed(2), {margin: '0 8px'}),
+      ui.Label(max.toFixed(2), {margin: '0 8px'})
+    ]
+  });
+
+  legend.add(gradient);
+  legend.add(labels);
+  return legend;
+}
+
+// 5. Layer & legend switch logic
+var currentLayer = null;
+var legendPanel = null;
+
+var selector = ui.Select({
+  items: Object.keys(visParamsDict),
+  placeholder: 'Select a layer to visualize',
+  style: {stretch: 'horizontal'},
+  onChange: function(selected) {
+    var config = visParamsDict[selected];
+
+    // Remove previous layer
+    if (currentLayer) Map.layers().remove(currentLayer);
+    currentLayer = ui.Map.Layer(config.image, config.vis, selected);
+    Map.layers().add(currentLayer);
+
+    // Replace previous legend
+    if (legendPanel) Map.widgets().remove(legendPanel);
+    legendPanel = createLegend(config.vis.palette, config.vis.min, config.vis.max, selected, config.units);
+    Map.widgets().add(legendPanel);
+  }
+});
+
+// 6. Initialize map and add UI selector
+Map.centerObject(buildingStats, 9);
+Map.add(selector);
+
+// Set initial default layer
+selector.setValue('Average Building Height');

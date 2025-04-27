@@ -1,0 +1,100 @@
+// 0. Configuration: replace with your own Asset ID
+var populationCollection = ee.FeatureCollection(
+  'projects/ee-chenyixuan0402/assets/population0422'
+);
+
+// 1. Print property names to confirm which field holds the density
+print('Property names:', populationCollection.first().propertyNames());
+
+// After checking the Console, set this to the correct field name:
+var DENSITY_FIELD = 'RASTERVALU';
+
+// 2. Convert the vector features to a raster image (unmasked) and rename the band
+var populationImage = populationCollection
+  .reduceToImage({
+    properties: [DENSITY_FIELD],
+    reducer: ee.Reducer.first()
+  })
+  .rename('population_density');
+
+// Quick sample check to ensure values are present
+print('Sample populationImage:', populationImage.sample({
+  region: populationCollection.geometry(),
+  numPixels: 10
+}));
+
+// 3. Calculate the 5th and 95th percentiles on the raw image
+var percentiles = populationImage.reduceRegion({
+  reducer: ee.Reducer.percentile([5, 95]),
+  geometry: populationCollection.geometry(),
+  scale: 1000,
+  maxPixels: 1e13,
+  bestEffort: true
+});
+print('Raw statistics:', percentiles);
+
+var min5 = ee.Number(percentiles.get('population_density_p5'));
+var max95 = ee.Number(percentiles.get('population_density_p95'));
+
+// 4. Mask out zero values so only positive density is rendered
+var maskedPopulationImage = populationImage.updateMask(populationImage.gt(0));
+
+// 5. Retrieve client-side values for visualization and legend
+var minValue = min5.getInfo();
+var maxValue = max95.getInfo();
+var midValue = Math.round((minValue + maxValue) / 2);
+
+// 6. Visualization parameters (nearest-neighbor rendering preserves grid cells)
+var visParams = {
+  min:    minValue,
+  max:    maxValue,
+  palette: ['lightyellow', 'orange', 'red', 'darkred']
+};
+
+// 7. Add the layer to the map (zoom in to ~12 for 1 km grid visibility)
+Map.centerObject(populationCollection, 8);
+Map.addLayer(maskedPopulationImage, visParams, 'Population Density (1 km grid)');
+
+// 8. Create and add a legend panel
+var legend = ui.Panel({
+  style: {
+    position: 'bottom-left',
+    padding:  '8px 15px'
+  }
+});
+legend.add(ui.Label('Population Density (people/km²)', {
+  fontWeight: 'bold',
+  fontSize:   '14px',
+  margin:     '0 0 4px 0'
+}));
+
+// Color bar thumbnail
+legend.add(ui.Thumbnail({
+  image: ee.Image.pixelLonLat().select(0),
+  params: {
+    bbox:       [0, 0, 1, 0.1],
+    dimensions: '200x10',
+    format:     'png',
+    min:        0,
+    max:        1,
+    palette:    visParams.palette
+  },
+  style: {
+    stretch: 'horizontal',
+    margin:  '0 0 4px 0'
+  }
+}));
+
+// Tick labels for min, mid and max values
+var tickValues = [minValue, midValue, maxValue];
+var tickPanel = ui.Panel({
+  layout: ui.Panel.Layout.flow('horizontal'),
+  style:  { stretch: 'horizontal' }
+});
+tickValues.forEach(function(val) {
+  tickPanel.add(ui.Label(val.toString(), { margin: '0 50px 0 0' }));
+});
+legend.add(tickPanel);
+
+Map.add(legend)；
+

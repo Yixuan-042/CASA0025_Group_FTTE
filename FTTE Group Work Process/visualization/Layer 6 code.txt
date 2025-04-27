@@ -1,0 +1,103 @@
+https://code.earthengine.google.com/944a1148eb959f02e0a418f464662534
+
+// ==================== 1. Load Guangzhou Districts Boundary ==================== //
+// (用新的区级边界代替之前的总边界 guangzhouBoundary)
+
+// Load districts
+var districts = ee.FeatureCollection('users/HuitingChen/GZ_boundaries');
+
+// Define boundary style
+var districtStyle = {
+  color: 'white',       // Boundary line color
+  width: 1.2,           // Boundary width
+  fillColor: '00000000' // Transparent fill
+};
+
+// Style the districts
+var districtStyled = districts.style(districtStyle);
+
+// ==================== 2. Load and Process Nighttime Lights ==================== //
+
+// Load nighttime lights feature collection
+var ntlFC = ee.FeatureCollection('projects/ee-chenyixuan0402/assets/NTL0422');
+
+// Print to check
+print('Sample NTL features:', ntlFC.limit(5));
+print('Property names:', ntlFC.first().propertyNames());
+
+// Convert vector to raster
+var ntlImage = ntlFC.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).rename('NTL_intensity');
+
+// Define color gradient palette (Blue → Violet → Red → Orange → Yellow → White)
+var palette = [
+  '0000ff',  // Blue
+  '8a2be2',  // Blue-violet
+  'ff0000',  // Red
+  'ffa500',  // Orange
+  'ffff00',  // Yellow
+  'ffffff'   // White
+];
+
+// Visualization parameters
+var visParams = {
+  min: 0,
+  max: 50,
+  palette: palette
+};
+
+// Mask out very low light areas
+var ntlMasked = ntlImage.updateMask(ntlImage.gt(0));
+
+// Clip nighttime light raster to districts boundary
+var ntlClipped = ntlMasked.clip(districts);
+
+// ==================== 3. Add Layers to Map ==================== //
+
+Map.centerObject(districts, 9);
+Map.addLayer(ntlClipped, visParams, 'Nighttime Lights (Districts Clipped)');
+Map.addLayer(districtStyled, {}, 'District Boundaries');
+
+// ==================== 4. Create Legend ==================== //
+
+var legend = ui.Panel({
+  style: { position: 'bottom-left', padding: '8px 15px' }
+});
+
+// Title
+legend.add(ui.Label({
+  value: 'Nighttime Light Intensity',
+  style: { fontWeight: 'bold', fontSize: '14px', margin: '0 0 4px 0' }
+}));
+
+// Color bar
+var colorBar = ui.Thumbnail({
+  image: ee.Image.pixelLonLat().select(0),
+  params: {
+    bbox: [0, 0, 1, 0.1],
+    dimensions: '200x10',
+    format: 'png',
+    min: 0,
+    max: 1,
+    palette: palette
+  },
+  style: { stretch: 'horizontal', margin: '0 0 8px 0' }
+});
+legend.add(colorBar);
+
+// Tick labels
+var tickPanel = ui.Panel({
+  layout: ui.Panel.Layout.flow('horizontal'),
+  style: { stretch: 'horizontal', margin: '0 0 0 0' }
+});
+
+var tickLabels = ['0', '10', '20', '30', '40', '50'];
+tickLabels.forEach(function(label) {
+  tickPanel.add(ui.Label(label, { margin: '0 18px', fontSize: '12px' }));
+});
+legend.add(tickPanel);
+
+// Add legend to map
+Map.add(legend);
