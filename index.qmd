@@ -123,8 +123,8 @@ createLegend function generates a unified style legend (supports custom units/co
 
 #### Interactive Panels
 
-The CO₂ panel in the upper right corner contains:
-Year selector
+- **The CO₂ panel in the upper right corner contains:**
+    - Year selector
 Line chart of city average trends
 Bar chart by district (automatically updated by year)
 The left synthesized panel contains:
@@ -139,11 +139,6 @@ The app constructs a Random Forest regression model to predict CO₂ emissions b
 
 
 ---
-
-- **Land-cover 2023** A median Landsat-9 composite is classified with a 50-tree Random-Forest trained on ESA WorldCover samples, producing seven classes with a custom palette.
-- **CO₂ emissions** The default view shows 2023; a drop-down instantly swaps any other year.
-- **Population density, NTL, building height, density and footprint ratio** are stored in a dictionary so one selector can toggle them; the legend is generated on the fly by `createLegend()`.
-
 
 
 ```js
