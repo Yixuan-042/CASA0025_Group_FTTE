@@ -1,0 +1,3 @@
+system:index,R,RMSE,R_squared,features_used,model,.geo
+0,0.11948188122971519,6311.057050731883,0.014275919942191767,11,All Features,"{""type"":""MultiPoint"",""coordinates"":[]}"
+1,0.12136308640348044,6310.597618176526,0.014728998741378658,6,Top Features,"{""type"":""MultiPoint"",""coordinates"":[]}"
