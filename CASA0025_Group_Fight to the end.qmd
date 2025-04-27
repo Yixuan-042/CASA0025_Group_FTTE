@@ -52,7 +52,7 @@ This application is designed for interactive environmental analysis using Google
 
 ### 1. Data Loading and Preprocessing
 
-#### 1.1 Data Loading and Preprocessing
+#### 1.1 Core Dataset Import
 
 The first step imports core datasets including district boundaries, population density, nighttime light intensity, building statistics, and CO₂ emission rasters for the years 2017–2023.
 
@@ -68,7 +68,8 @@ A boundary layer is added to the map, ensuring district outlines remain on top o
 
 #### 1.2 Landcover Classification
 
-Landsat 9 imagery and ESA WorldCover data are used to train a Random Forest classifier. The resulting landcover classification is simplified into 7 categories for clearer visualization.
+Landsat 9 imagery combined with ESA WorldCover data is used to train a Random Forest classifier. 
+The resulting landcover classification is simplified into seven categories to enhance visualization clarity.
 
 ```js
 var composite = landsat9.median().clip(districts);
@@ -77,7 +78,7 @@ var classifier = ee.Classifier.smileRandomForest(50).train({ ... });
 var classified = composite.classify(classifier).remap([10,20,...],[0,1,...]);
 ```
 
-#### 1.3 CO₂ Emission Visualization
+#### 1.3 CO₂ Emissions Visualization
 
 The application visualizes CO₂ emissions dynamically across different years. A dropdown menu allows users to switch between annual layers, and charts provide both citywide trends and district-level distributions.
 
