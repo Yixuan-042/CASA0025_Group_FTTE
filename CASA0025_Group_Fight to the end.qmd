@@ -39,8 +39,6 @@ This application provides urban planners and researchers with an intuitive inter
 
 ## The Application 
 
-Replace the link below with the link to your application.
-
 :::{.column-page}
 
 <iframe src='https://ee-huitingchen1020.projects.earthengine.app/view/co2-emission-analysis-and-projections' width='100%' height='700px'></iframe>
