@@ -67,8 +67,7 @@ Two floating panels orchestrate the interface:
 `bringBoundaryToFront()` re-adds the boundary layer after every change to guarantee visibility.
 
 ### 4  Scenario prediction  
-Inside six core districts, 2 000 pixels are sampled to train a 100-tree **Random-Forest regression** that predicts CO₂ from eleven land-cover dummies plus building, population and density features.  
-The *Prediction* panel offers three preset transformations (e.g. **20 % built-up → forest**). Selected pixels are altered with `where()`, the model recomputes emissions, and the **difference map** (blue = decrease, red = increase) appears, allowing planners to gauge mitigation potential in seconds.
+
 ---
 
 
