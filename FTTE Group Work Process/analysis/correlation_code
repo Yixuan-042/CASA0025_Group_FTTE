@@ -1,0 +1,461 @@
+https://code.earthengine.google.com/24d6f82e3e66bced5fa653f4367f5c78
+
+// ==============================
+// 1. 导入数据
+// ==============================
+var co2 = ee.FeatureCollection('projects/ee-71magicsong/assets/CO2_guangzhou');
+var ntl = ee.FeatureCollection('projects/ee-71magicsong/assets/NTL_guangzhou');
+var landcover = ee.FeatureCollection('projects/ee-71magicsong/assets/landcover_guangzhou');
+var population = ee.FeatureCollection('projects/ee-71magicsong/assets/population_guangzhou');
+var buildingGrid = ee.FeatureCollection('users/marshhiiiiii/BuildingGrid');
+var roi = co2;
+
+// 检查原始数据点数量
+print('原始CO2数据点数量:', co2.size());
+print('原始NTL数据点数量:', ntl.size());
+print('原始土地覆盖数据点数量:', landcover.size());
+print('原始人口数据点数量:', population.size());
+
+// 在地图上展示研究区域
+Map.addLayer(roi, {}, '研究区域');
+Map.centerObject(roi);
+
+// ==============================
+// 2. 矢量转栅格
+// ==============================
+
+// 将矢量数据转换为栅格图像
+var co2_img = co2.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('co2');
+
+var landcover_img = landcover.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('landcover');
+
+var population_img = population.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('population');
+
+var ntl_img = ntl.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('ntl');
+
+var height_img = buildingGrid.reduceToImage({
+  properties: ['MeanHeight'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('MeanHeight');
+
+var cover_img = buildingGrid.reduceToImage({
+  properties: ['BuiCover'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('BuiCover');
+
+var density_img = buildingGrid.reduceToImage({
+  properties: ['BuiDensity'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('BuiDensity');
+
+// ==============================
+// 3. 特征工程：土地覆盖虚拟变量和特征归一化
+// ==============================
+
+// 方法1：直接使用预定义的土地覆盖类型值
+// 根据您的描述，有7种有效的土地覆盖类型
+var landcoverClasses = [10, 20, 30, 40, 50, 60, 80]; // 替换为您的实际土地覆盖类型值
+
+// 创建土地覆盖类型的虚拟变量图像
+var dummyBands = [];
+for (var i = 0; i < landcoverClasses.length; i++) { 
+  var classValue = landcoverClasses[i];
+  // 确保每个虚拟变量都是一个独立的波段
+  var dummyBand = landcover_img.eq(ee.Number(classValue)).rename('lc_' + classValue);
+  dummyBands.push(dummyBand);
+}
+
+// 将所有虚拟变量合并为一个多波段图像
+var landcover_dummy = ee.Image.cat(dummyBands);
+
+// 打印虚拟变量波段名称以确认
+print('土地覆盖虚拟变量波段:', landcover_dummy.bandNames());
+
+// 计算用于归一化的统计数据 - 添加这部分代码
+var population_stats = population_img.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: roi.geometry(),
+  scale: 1000,
+  maxPixels: 1e13
+});
+
+var ntl_stats = ntl_img.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: roi.geometry(),
+  scale: 1000,
+  maxPixels: 1e13
+});
+
+var height_stats = height_img.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: roi.geometry(),
+  scale: 1000,
+  maxPixels: 1e13
+});
+
+var cover_stats = cover_img.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: roi.geometry(),
+  scale: 1000,
+  maxPixels: 1e13
+});
+
+var density_stats = density_img.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: roi.geometry(),
+  scale: 1000,
+  maxPixels: 1e13
+});
+
+// 执行特征归一化 - 添加这部分代码
+var population_norm = population_img
+  .subtract(ee.Number(population_stats.get('population_min')))
+  .divide(ee.Number(population_stats.get('population_max')).subtract(ee.Number(population_stats.get('population_min'))))
+  .rename('population_norm');
+
+var ntl_norm = ntl_img
+  .subtract(ee.Number(ntl_stats.get('ntl_min')))
+  .divide(ee.Number(ntl_stats.get('ntl_max')).subtract(ee.Number(ntl_stats.get('ntl_min'))))
+  .rename('ntl_norm');
+
+var height_norm = height_img
+  .subtract(ee.Number(height_stats.get('MeanHeight_min')))
+  .divide(ee.Number(height_stats.get('MeanHeight_max')).subtract(ee.Number(height_stats.get('MeanHeight_min'))))
+  .rename('height_norm');
+
+var cover_norm = cover_img
+  .subtract(ee.Number(cover_stats.get('BuiCover_min')))
+  .divide(ee.Number(cover_stats.get('BuiCover_max')).subtract(ee.Number(cover_stats.get('BuiCover_min'))))
+  .rename('cover_norm');
+
+var density_norm = density_img
+  .subtract(ee.Number(density_stats.get('BuiDensity_min')))
+  .divide(ee.Number(density_stats.get('BuiDensity_max')).subtract(ee.Number(density_stats.get('BuiDensity_min'))))
+  .rename('density_norm');
+
+// 合并所有特征图像
+var com_img = ee.Image.cat([
+  landcover_dummy, 
+  population_norm, 
+  ntl_norm, 
+  height_norm, 
+  cover_norm, 
+  density_norm
+]);
+
+print('特征图像波段名称:', com_img.bandNames());
+
+
+// ==============================
+// 4. 计算每个网格的特征值（用于训练）
+// ==============================
+
+// 创建初始特征集合（未过滤）
+var initial_class_fea = co2.map(function(fea) {
+  // 对每个网格提取特征值
+  var stats = com_img.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: fea.geometry(),
+    scale: 1000,
+    crs: 'EPSG:4326',
+    maxPixels: 1e13
+  });
+  
+  // 获取CO2值作为目标变量
+  var co2Value = fea.get('RASTERVALU');
+  
+  // 将统计结果和CO2值设为属性返回
+  return fea.set(stats).set('co2_value', co2Value);
+});
+
+// 检查一个样本的属性，确认土地覆盖虚拟变量是否存在
+print('样本属性示例:', initial_class_fea.first().toDictionary());
+
+// 检查每个特征的null值情况
+var bandNames = com_img.bandNames();
+var nullCheckResults = bandNames.map(function(band) {
+  var notNullCount = initial_class_fea.filter(ee.Filter.notNull([band])).size();
+  return ee.Feature(null, {
+    'feature': band,
+    'valid_count': notNullCount,
+    'null_count': initial_class_fea.size().subtract(notNullCount)
+  });
+});
+
+print('各特征的缺失值统计:', ee.FeatureCollection(nullCheckResults));
+
+// 过滤掉无效值，但保留土地覆盖虚拟变量
+var class_fea = initial_class_fea.filter(ee.Filter.and(
+  ee.Filter.notNull(['ntl_norm']),
+  ee.Filter.notNull(['height_norm']),
+  ee.Filter.notNull(['cover_norm'])
+  // 不过滤土地覆盖虚拟变量，即使它们可能有null值
+));
+
+// ==============================
+// 5. 特征相关性分析
+// ==============================
+
+// 准备相关性分析的数据
+var correlationSample = class_fea.randomColumn('random');
+var correlationData = correlationSample.filter(ee.Filter.lt('random', 0.3)); // 使用30%的数据进行相关性分析
+
+// 获取所有特征名称
+var bandNames = com_img.bandNames();
+print('所有特征名称:', bandNames);
+
+// 区分连续特征和分类特征
+var continuousFeatures = ['population_norm', 'ntl_norm', 'height_norm', 'cover_norm', 'density_norm'];
+
+// 1. 计算每个特征与CO2的相关性（保留您原有的代码）
+var correlationsList = ee.FeatureCollection(bandNames.map(function(band) {
+  band = ee.String(band);
+
+  var correlation = correlationData.reduceColumns({
+    reducer: ee.Reducer.pearsonsCorrelation(),
+    selectors: [band, 'co2_value']
+  });
+
+  var corr = ee.Number(correlation.get('correlation'));
+
+  // 判断 corr 是否为 NaN（NaN != NaN）
+  var corrIsValid = corr.neq(corr).not();  // true 表示不是 NaN
+
+  return ee.Algorithms.If(corrIsValid,
+    ee.Feature(null, {
+      'feature': band,
+      'correlation': corr,
+      'correlation_abs': corr.abs()
+    }),
+    null
+  );
+})).filter(ee.Filter.notNull(['correlation']));
+
+// 将相关性结果转换为FeatureCollection并按相关性绝对值排序
+var correlationsFC = ee.FeatureCollection(correlationsList)
+  .sort('correlation_abs', false);
+
+print('特征与CO2的相关性排序:', correlationsFC);
+
+// 导出相关性结果
+Export.table.toDrive({
+  collection: correlationsFC,
+  description: 'Feature_Correlations',
+  fileFormat: 'CSV'
+});
+
+// 2. 计算连续特征之间的相关性矩阵
+// 安全的相关性计算函数
+var safeCorrelation = function(data, feature1, feature2) {
+  // 如果是同一特征，返回1
+  if (feature1 === feature2) {
+    return 1;
+  }
+  
+  try {
+    // 过滤掉两个特征中任一为null的样本
+    var validData = data.filter(ee.Filter.and(
+      ee.Filter.notNull([feature1]),
+      ee.Filter.notNull([feature2])
+    ));
+    
+    // 计算相关性
+    var result = validData.reduceColumns({
+      reducer: ee.Reducer.pearsonsCorrelation(),
+      selectors: [feature1, feature2]
+    });
+    
+    return result.get('correlation');
+  } catch (e) {
+    print('计算相关性时出错:', feature1, feature2, e);
+    return null;
+  }
+};
+
+// 计算所有连续特征之间的相关性
+var continuousCorrelations = [];
+for (var i = 0; i < continuousFeatures.length; i++) {
+  for (var j = 0; j < continuousFeatures.length; j++) {  // 计算完整矩阵
+    var feature1 = continuousFeatures[i];
+    var feature2 = continuousFeatures[j];
+    
+    var correlation = safeCorrelation(correlationData, feature1, feature2);
+    
+    if (correlation !== null) {
+      continuousCorrelations.push(ee.Feature(null, {
+        'feature1': feature1,
+        'feature2': feature2,
+        'correlation': correlation,
+        'correlation_abs': ee.Algorithms.If(
+          ee.Number(correlation).neq(ee.Number(correlation)),  // 检查是否为NaN
+          0,  // 如果是NaN，使用0
+          ee.Number(correlation).abs()  // 否则使用绝对值
+        )
+      }));
+    }
+  }
+}
+
+// 将结果转换为FeatureCollection
+var continuousCorrelationsFC = ee.FeatureCollection(continuousCorrelations);
+
+// 导出连续特征之间的相关性矩阵
+Export.table.toDrive({
+  collection: continuousCorrelationsFC,
+  description: 'Continuous_Features_Correlation_Matrix',
+  fileFormat: 'CSV'
+});
+
+print('连续特征之间的相关性矩阵:', continuousCorrelationsFC);
+
+
+// ==============================
+// 6. 准备训练和测试数据
+// ==============================
+
+// 随机分割训练集和测试集
+var split = 0.7;  // 70%用于训练，30%用于测试
+var withRandom = class_fea.randomColumn('random');
+var trainingSet = withRandom.filter(ee.Filter.lt('random', split));
+var testingSet = withRandom.filter(ee.Filter.gte('random', split));
+
+print('训练集样本数量:', trainingSet.size());
+print('测试集样本数量:', testingSet.size());
+
+// 基于相关性分析，选择用于模型的特征
+// 先使用所有连续特征
+var modelFeatures = continuousFeatures;
+
+// 添加相关性较高的土地覆盖类型（如果有）
+// 这里我们假设lc_10和lc_50可能与CO2相关性较高
+modelFeatures = modelFeatures.concat(['lc_10', 'lc_50']);
+
+print('选择用于模型的特征:', modelFeatures);
+
+// ==============================
+// 7. 随机森林回归训练
+// ==============================
+
+// 使用随机森林进行回归建模
+var rfModel = ee.Classifier.smileRandomForest(100)  // 减少树的数量以提高性能
+  .setOutputMode('REGRESSION')
+  .train({
+    features: trainingSet,
+    classProperty: "RASTERVALU",
+    inputProperties: modelFeatures
+  });
+
+// 使用训练好的模型对图像进行预测
+var predictedImage = com_img.select(modelFeatures).classify(rfModel)
+  .clip(roi)
+  .float()
+  .rename('predicted_co2');
+
+// 显示预测结果图像
+var visParams = {
+  min: 0,
+  max: ee.Number(co2.aggregate_mean('RASTERVALU')).multiply(2).getInfo(),
+  palette: ['blue', 'cyan', 'green', 'yellow', 'orange', 'red']
+};
+
+Map.addLayer(co2_img, visParams, '实际CO2排放');
+Map.addLayer(predictedImage, visParams, '预测CO2排放');
+
+// ==============================
+// 8. 模型评估
+// ==============================
+
+// 对测试集进行预测
+var testPredict = testingSet.classify(rfModel, 'predicted_co2');
+
+// 计算R²和RMSE
+var modelStats = testPredict.reduceColumns({
+  reducer: ee.Reducer.pearsonsCorrelation(),
+  selectors: ['RASTERVALU', 'predicted_co2']
+});
+
+var modelRMSE = testPredict.map(function(feature) {
+  var diff = ee.Number(feature.get('RASTERVALU')).subtract(ee.Number(feature.get('predicted_co2')));
+  return feature.set('diff_sq', diff.pow(2));
+}).reduceColumns({
+  reducer: ee.Reducer.mean(),
+  selectors: ['diff_sq']
+});
+
+// 输出评估结果
+print('模型 - R:', modelStats.get('correlation'));
+print('模型 - R²:', ee.Number(modelStats.get('correlation')).pow(2));
+print('模型 - RMSE:', ee.Number(modelRMSE.get('mean')).sqrt());
+
+// ==============================
+// 9. 导出结果
+// ==============================
+
+// 导出模型评估结果
+var evaluationResults = ee.FeatureCollection([
+  ee.Feature(null, {
+    'model': 'Random Forest',
+    'R': modelStats.get('correlation'),
+    'R_squared': ee.Number(modelStats.get('correlation')).pow(2),
+    'RMSE': ee.Number(modelRMSE.get('mean')).sqrt(),
+    'features_used': modelFeatures.length
+  })
+]);
+
+Export.table.toDrive({
+  collection: evaluationResults,
+  description: 'Model_Evaluation_Results',
+  fileFormat: 'CSV'
+});
+
+// 导出训练数据
+Export.table.toDrive({
+  collection: class_fea,
+  description: 'Training_Data_With_Features',
+  fileFormat: 'CSV'
+});
+
+// 导出预测结果
+Export.image.toDrive({
+  image: predictedImage,
+  description: 'CO2_Prediction_Map',
+  scale: 1000,
+  region: roi.geometry(),
+  fileFormat: 'GeoTIFF'
+});
+
+// 导出特征重要性
+var importance = ee.Dictionary(rfModel.explain())
+  .get('importance');
+
+var importanceFC = ee.FeatureCollection(modelFeatures.map(function(band) {
+  return ee.Feature(null, {
+    'feature': band,
+    'importance': ee.Dictionary(importance).get(band)
+  });
+}));
+
+Export.table.toDrive({
+  collection: importanceFC,
+  description: 'Feature_Importance',
+  fileFormat: 'CSV'
+});
