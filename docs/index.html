@@ -123,7 +123,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h1>CO₂ Emission Analysis and Projections in Guangzhou, China</h1>
 <section id="project-summary" class="level2">
 <h2 class="anchored" data-anchor-id="project-summary">Project Summary</h2>
-<p>Fill in the sections below to provide a brief summary of your project. Each section should have no more than 100 words. Do not edit any of the headings.</p>
 <section id="problem-statement" class="level3">
 <h3 class="anchored" data-anchor-id="problem-statement">Problem Statement</h3>
 <p>As the world’s largest emitter of carbon dioxide (CO2), China faces significant challenges in addressing climate change. With cities contributing over 70% of global energy-related CO2 emissions, understanding urban emission patterns is crucial. We selected Guangzhou as our study area due to its economic significance in the Greater Bay Area, rapid urbanization, and diverse land use patterns. This application explores relationships between nighttime lights, population, land cover, and building characteristics with CO2 emissions to identify key emission drivers and support evidence-based carbon reduction policies in rapidly developing Chinese cities.</p>
@@ -134,7 +133,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="data" class="level3">
 <h3 class="anchored" data-anchor-id="data">Data</h3>
-<p>CO₂ Emissions Data: Annual CO₂ emissions data is sourced from the ODIAC 2023 dataset (ODIAC 2023). Historical emissions from 2018 to 2022 are also included to support temporal trend analysis.</p>
+<p>CO₂ Emissions Data: Annual CO₂ emissions data is sourced from the ODIAC 2023 dataset (ODIAC 2023). Historical emissions from 2017 to 2022 are also included to support temporal trend analysis.</p>
 <p>Land Cover Data: Land cover classification is generated using Landsat 9 Surface Reflectance imagery and ESA WorldCover 2021 as training labels. A Random Forest model is trained and applied in Google Earth Engine to produce a 30-meter resolution land cover map.</p>
 <p>Population Data: Population data is provided by the Chinese Academy of Sciences, offering 1 km × 1 km gridded raster data for China, supporting demographic and spatial distribution analysis.</p>
 <p>Nighttime Light Data: Nighttime light intensity for 2023 is processed using monthly VIIRS DNB composites in Google Earth Engine. The data is aggregated to produce a 100-meter resolution raster clipped to the Guangzhou boundary.</p>
@@ -142,7 +141,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="methodology" class="level3">
 <h3 class="anchored" data-anchor-id="methodology">Methodology</h3>
-<p>Data Preprocessing: Clip and project CO2 emissions, landcover types, urban building coverage, population, and nighttime light data in Guangzhou to create uniform raster files. Model Construction: Use Random Forest machine learning with land cover types, urban building coverage, population, and nighttime light data as independent variables, and CO2 emissions as the dependent variable. Address multicollinearity by processing six landcover types, forming regression models for Guangzhou’s administrative and built-up areas. Visualization and Prediction: Design layers to display CO2 emissions distribution. Utilize the fourth regression model to simulate urban densification impacts on emissions, adjusting landcover proportions to predict future CO2 levels.</p>
+<p>Data Preprocessing: Clip and project CO2 emissions, landcover types, building coverage, population, and nighttime light data in Guangzhou to create uniform raster files. Model Construction: Employ Random Forest with CO2 emissions as the dependent variable and the rest of data as independent variables. The model is constructed for the six districts in the central Guangzhou by conducting regression analysis after screening the independent variables by colinearity. Visualization and Prediction: Design layers to display CO2 emissions distribution. Use the regression model to simulate urban densification effects, by adjusting land cover proportions to forecast future emissions.</p>
 </section>
 <section id="interface" class="level3">
 <h3 class="anchored" data-anchor-id="interface">Interface</h3>
@@ -151,7 +150,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="the-application" class="level2 page-columns page-full">
 <h2 class="anchored" data-anchor-id="the-application">The Application</h2>
-<p>Replace the link below with the link to your application.</p>
 <div class="column-page">
 <iframe src="https://ee-huitingchen1020.projects.earthengine.app/view/co2-emission-analysis-and-projections" width="100%" height="700px">
 </iframe>
@@ -159,15 +157,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="how-it-works" class="level2">
 <h2 class="anchored" data-anchor-id="how-it-works">How it Works</h2>
-<p>Use this section to explain how your application works using code blocks and text explanations (no more than 500 words excluding code):</p>
 <section id="application-overview" class="level3">
 <h3 class="anchored" data-anchor-id="application-overview">Application Overview</h3>
 <p>This application is designed for interactive environmental analysis using Google Earth Engine (GEE). It integrates multiple geospatial datasets, builds thematic visualizations, and applies machine learning models to predict CO₂ emissions under various landcover scenarios.</p>
 </section>
 <section id="data-loading-and-preprocessing" class="level3">
 <h3 class="anchored" data-anchor-id="data-loading-and-preprocessing">1. Data Loading and Preprocessing</h3>
-<section id="data-loading-and-preprocessing-1" class="level4">
-<h4 class="anchored" data-anchor-id="data-loading-and-preprocessing-1">1.1 Data Loading and Preprocessing</h4>
+<section id="core-dataset-import" class="level4">
+<h4 class="anchored" data-anchor-id="core-dataset-import">1.1 Core Dataset Import</h4>
 <p>The first step imports core datasets including district boundaries, population density, nighttime light intensity, building statistics, and CO₂ emission rasters for the years 2017–2023.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> districts <span class="op">=</span> ee<span class="op">.</span><span class="fu">FeatureCollection</span>(<span class="st">'users/.../GZ_boundaries'</span>)<span class="op">;</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> populationFC <span class="op">=</span> ee<span class="op">.</span><span class="fu">FeatureCollection</span>(<span class="st">'projects/.../population0422'</span>)<span class="op">;</span></span>
@@ -179,14 +176,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="landcover-classification" class="level4">
 <h4 class="anchored" data-anchor-id="landcover-classification">1.2 Landcover Classification</h4>
-<p>Landsat 9 imagery and ESA WorldCover data are used to train a Random Forest classifier. The resulting landcover classification is simplified into 7 categories for clearer visualization.</p>
+<p>Landsat 9 imagery combined with ESA WorldCover data is used to train a Random Forest classifier. The resulting landcover classification is simplified into seven categories to enhance visualization clarity.</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> composite <span class="op">=</span> landsat9<span class="op">.</span><span class="fu">median</span>()<span class="op">.</span><span class="fu">clip</span>(districts)<span class="op">;</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> samples <span class="op">=</span> composite<span class="op">.</span><span class="fu">addBands</span>(esa)<span class="op">.</span><span class="fu">sample</span>({ <span class="op">...</span> })<span class="op">;</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> classifier <span class="op">=</span> ee<span class="op">.</span><span class="at">Classifier</span><span class="op">.</span><span class="fu">smileRandomForest</span>(<span class="dv">50</span>)<span class="op">.</span><span class="fu">train</span>({ <span class="op">...</span> })<span class="op">;</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> classified <span class="op">=</span> composite<span class="op">.</span><span class="fu">classify</span>(classifier)<span class="op">.</span><span class="fu">remap</span>([<span class="dv">10</span><span class="op">,</span><span class="dv">20</span><span class="op">,...</span>]<span class="op">,</span>[<span class="dv">0</span><span class="op">,</span><span class="dv">1</span><span class="op">,...</span>])<span class="op">;</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
-<section id="co₂-emission-visualization" class="level4">
-<h4 class="anchored" data-anchor-id="co₂-emission-visualization">1.3 CO₂ Emission Visualization</h4>
+<section id="co₂-emissions-visualization" class="level4">
+<h4 class="anchored" data-anchor-id="co₂-emissions-visualization">1.3 CO₂ Emissions Visualization</h4>
 <p>The application visualizes CO₂ emissions dynamically across different years. A dropdown menu allows users to switch between annual layers, and charts provide both citywide trends and district-level distributions.</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> co2Images <span class="op">=</span> years<span class="op">.</span><span class="fu">reduce</span>(<span class="kw">function</span>(obj<span class="op">,</span> y) {</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  obj[y] <span class="op">=</span> ee<span class="op">.</span><span class="fu">Image</span>(co2Paths[y])<span class="op">;</span></span>
@@ -210,7 +207,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="layer-and-legend-management" class="level4">
 <h4 class="anchored" data-anchor-id="layer-and-legend-management">2.2 Layer and Legend Management</h4>
-<p>Administrative boundary layer always on top. - <strong>Land cover map:</strong> 7 categories of land based on training outputs - <strong>CO₂ emission layer:</strong> default 2023, supports year switching - <strong>Other thematic layers:</strong> selector switching, automatic legend refreshing createLegend function generates a unified style legend (supports custom units/colors)</p>
+<p>This section describes how different data layers are managed and visualized within the application, ensuring a seamless interactive experience. A unified legend style is dynamically generated to accompany each thematic layer. - <strong>Administrative boundary layer:</strong> always on top. - <strong>Land cover map:</strong> 7 categories of land based on training outputs - <strong>CO₂ emission layer:</strong> default 2023, supports year switching - <strong>Other thematic layers:</strong> selector switching, automatic legend refreshing - createLegend function generates a unified style legend (supports custom units/colors)</p>
 </section>
 <section id="interactive-panels" class="level4">
 <h4 class="anchored" data-anchor-id="interactive-panels">2.3 Interactive Panels</h4>
