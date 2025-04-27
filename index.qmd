@@ -50,7 +50,7 @@ Replace the link below with the link to your application.
 
 :::{.column-page}
 
-<iframe src='https://ollielballinger.users.earthengine.app/view/turkey-earthquake' width='100%' height='700px'></iframe>
+<iframe src='https://ee-huitingchen1020.projects.earthengine.app/view/co2-emission-analysis-and-projections' width='100%' height='700px'></iframe>
 
 :::
 ## How it Works 
@@ -139,25 +139,85 @@ createLegend function generates a unified style legend (supports custom units/co
 
 ### 3. Predictive Modeling with Random Forest
 
-The app constructs a Random Forest regression model to predict CO₂ emissions based on....
-
-
----
-
+This project uses a Random Forest model to predict CO₂ emissions from urban features. 
+Users select landcover change scenarios (e.g., Built-up to Forest), apply changes, and the model automatically re-predicts CO₂ emissions based on the updated features, showing spatial impacts and emission percentage changes.
+The model focuses on the city’s core districts to ensure higher prediction accuracy and computational efficiency.
 
 ```js
-Map.setCenter(35.51898, 33.90153, 15);
+// Feature engineering
+var combo4Features = [
+  'MeanHeight', 'population', 'density', 'BuiCover',
+  'lc_10', 'lc_20', 'lc_30', 'lc_40', 'lc_50', 'lc_60', 'lc_80'
+];
 
-Map.setOptions("satellite");
+// Restricting the scope of reasoning to the central city
+var coreDistricts = districts.filter(ee.Filter.inList('ENG_NAME',[
+  'Tianhe', 'Yuexiu', 'Haizhu', 'Liwan', 'Baiyun', 'Huangpu'
+]));
 
-var aoi = ee.Geometry.Point(35.51898, 33.90153).buffer(3000);
+// Training Random Forests
+var samples = featureImg.sample({
+  region: coreDistricts.geometry(),
+  scale: 1000,
+  numPixels: 2000,
+  seed: 42,
+  geometries: true
+}).filter(ee.Filter.notNull(combo4Features));
+
+var rf = ee.Classifier.smileRandomForest(100)
+  .setOutputMode('REGRESSION')
+  .train({
+    features: samples,
+    classProperty: 'RASTERVALU',
+    inputProperties: combo4Features
+  });
+
+// Predict raw baseline
+var baselinePred = featureImg.select(combo4Features).classify(rf);
+
+// Drop-down box for selecting scenarios
+var scenarioSelect = ui.Select({
+  items: [
+    'Built-up ➔ Greenplace (20%)',
+    'Bare ➔ Built-up (20%)',
+    'Cropland ➔ Forest (50%)',
+  ],
+  style: {
+    stretch: 'horizontal',
+    fontWeight: 'bold',
+    fontSize: '14px'
+  }
+});
+
+var applyButton = ui.Button({
+  label: 'Apply Change & Predict',
+  style: {stretch: 'horizontal', fontWeight: 'bold'},
+  onClick: function() {
+    var selected = scenarioSelect.getValue();
+    var percentage;
+    var modifiedLandcover = landcoverImg;
+    
+    if (selected === 'Built-up ➔ Greenplace (20%)') {
+      percentage = 0.2;
+      modifiedLandcover = landcoverImg.where(
+        landcoverImg.eq(50).and(ee.Image.random().lt(percentage)),
+        10
+      );
+    }
+    if (selected === 'Bare ➔ Built-up (20%)') {
+      percentage = 0.2;
+      modifiedLandcover = landcoverImg.where(
+        landcoverImg.eq(40).and(ee.Image.random().lt(percentage)),
+        50
+      );
+    }
+    if (selected === 'Cropland ➔ Forest (50%)') {
+      percentage = 0.5;
+      modifiedLandcover = landcoverImg.where(
+        landcoverImg.eq(60).and(ee.Image.random().lt(percentage)),
+        20
+      );
+    }
 ```
-
-You can include images:
-
-![Pixelwise T-Test, 2018](images/beirut_change_2020.jpg)
-
-and math:
-$$ \Large t = {\frac{\overline{x_1}-\overline{x_2}} {\sqrt{\frac{s^2_1}{n_1} + \frac{s^2_2}{n_2}}}} $$
-
+---
 
