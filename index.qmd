@@ -14,7 +14,18 @@ Who are you building this application for? How does it address a need this commu
 
 ### Data
 
-What data are you using? 
+We choose to analyze CO₂ emissions and urban land use in Guangzhou, China. Guangzhou is one of the megacities located in the southeastern coastal region of China. With its high level of urban development and diverse land use types, it serves as a representative case for studying the relationship between urban development and CO₂ emissions in large Chinese cities.
+•	CO₂ Emissions Data:
+CO₂ emissions data is sourced from the ODIAC 2023 dataset (https://db.cger.nies.go.jp/dataset/ODIAC/DL_odiac2023.html).
+We also plan to visualize CO₂ emissions from previous years. Historical CO₂ emissions data from 2018 to 2022 are available and can be included in the analysis.
+•	Land Use Data Analysis:
+Urban and agglomeration area land use data is categorized into six types: cropland, forest, grassland, water bodies, artificial surfaces, and unused land. Remote sensing imagery from the USGS Landsat 9 Collection 2 Tier 1 Raw Scenes (https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LC09_C02_T1?hl=zh-cn) in Google Earth Engine (GEE) is used for classification. Classification is based on the different reflectance characteristics of land cover types in visible, near-infrared, and shortwave infrared bands. The data has a resolution of 30 meters, making it suitable for grid-based analysis.
+•	POI Data:
+We use land use AOI data from OpenStreetMap (OSM) to refine the classification of artificial surfaces within each 1 km × 1 km grid. These are further divided into residential, commercial, industrial, and green space categories. For each grid, we calculate the proportion of each functional type. The dominant land use type of a grid is defined by the land use category occupying the largest area. For example, if a grid contains 30% residential, 20% commercial, and 50% industrial land, its dominant land use type is classified as industrial.
+•	Population Data:
+1 km × 1 km gridded population raster data for China, provided by the Chinese Academy of Sciences.
+•	VIIRS Nighttime Light Data:
+Average annual nighttime light data on a global scale, provided by the Earth Observation Group, NCEI, NOAA.
 
 ### Methodology
 
