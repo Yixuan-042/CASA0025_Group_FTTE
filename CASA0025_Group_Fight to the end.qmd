@@ -109,11 +109,12 @@ Map.onClick(function(coords) { ... });
 
 #### 2.2 Layer and Legend Management
 
-Administrative boundary layer always on top.
+This section describes how different data layers are managed and visualized within the application, ensuring a seamless interactive experience. A unified legend style is dynamically generated to accompany each thematic layer.
+- **Administrative boundary layer:** always on top.
 - **Land cover map:** 7 categories of land based on training outputs
 - **CO₂ emission layer:** default 2023, supports year switching
 - **Other thematic layers:** selector switching, automatic legend refreshing
-createLegend function generates a unified style legend (supports custom units/colors)
+- createLegend function generates a unified style legend (supports custom units/colors)
 
 #### 2.3 Interactive Panels
 
