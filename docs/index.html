@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.6.42">
+<meta name="generator" content="quarto-1.6.43">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -68,12 +68,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-17c909d5fd25ae21b861c0c7a49b2096.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-17c909d5fd25ae21b861c0c7a49b2096.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-c9f0887447d3a639491f60c4af03832d.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-c9f0887447d3a639491f60c4af03832d.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-a6922759476aef36a34b7a596b22ea8b.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-f9003a219922207c0b918b63dadc5975.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-ee74768a790547ec7c1db9db7b0545f6.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-545f0991ca8a5181e9139037384650de.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
 <script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
@@ -231,13 +231,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li>Dynamically updated legend</li>
 <li>Pie chart of land cover proportions in 2023</li>
 </ul></li>
+<li><strong>The predict panel contains:</strong>
+<ul>
+<li>Select the combination to be simulated</li>
+<li>Button for submitting a simulation request</li>
+<li>Simulation result display</li>
+</ul></li>
 <li>Real-time sampling and display of pixel values and units when clicking on the map.</li>
 </ul>
 </section>
 </section>
 <section id="predictive-modeling-with-random-forest" class="level3">
 <h3 class="anchored" data-anchor-id="predictive-modeling-with-random-forest">3. Predictive Modeling with Random Forest</h3>
-<p>This project uses a Random Forest model to predict CO₂ emissions from urban features. Users select landcover change scenarios (e.g., Built-up to Forest), apply changes, and the model automatically re-predicts CO₂ emissions based on the updated features, showing spatial impacts and emission percentage changes. The model focuses on the city’s core districts to ensure higher prediction accuracy and computational efficiency.</p>
+<p>This project uses a Random Forest model to predict CO₂ emissions from urban features. Users select landcover change scenarios (e.g., Built-up to Forest), apply changes, and the model automatically re-predicts CO₂ emissions based on the updated features, showing spatial impacts and emission percentage changes. In order to improve computational efficiency and accuracy, the simulator was pre-programmed with three sets of combinations of changing land types, and the simulation area was focused on the six zones with the highest CO2 emissions.</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode js code-with-copy"><code class="sourceCode javascript"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Feature engineering</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> combo4Features <span class="op">=</span> [</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">'MeanHeight'</span><span class="op">,</span> <span class="st">'population'</span><span class="op">,</span> <span class="st">'density'</span><span class="op">,</span> <span class="st">'BuiCover'</span><span class="op">,</span></span>
