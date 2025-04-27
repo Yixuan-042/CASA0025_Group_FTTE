@@ -50,12 +50,12 @@ Replace the link below with the link to your application.
 
 Use this section to explain how your application works using code blocks and text explanations (no more than 500 words excluding code):
 
-## Application Overview
+### Application Overview
 
 This application is designed for interactive environmental analysis using Google Earth Engine (GEE).  
 It integrates multiple geospatial datasets, builds thematic visualizations, and applies machine learning models to predict CO₂ emissions under various landcover scenarios.
 
-## Data Loading and Preprocessing
+### Data Loading and Preprocessing
 
 The first step imports core datasets including district boundaries, population density, nighttime light intensity, building statistics, and CO₂ emission rasters for the years 2017–2023.
 
@@ -67,6 +67,7 @@ var buildingStats = ee.FeatureCollection('projects/.../BuildingGrid0424');
 var co2Paths = { 2017: 'users/.../2017co2', ..., 2023: 'users/.../2023co2' };
 Map.centerObject(districts, 9);
 
+A boundary layer is added to the map, ensuring district outlines remain on top of all visualizations.
  
 
 ---
