@@ -1,0 +1,400 @@
+// ==============================
+// 1. Import data
+// ==============================
+var co2 = ee.FeatureCollection('projects/ee-71magicsong/assets/CO2_guangzhou');
+var ntl = ee.FeatureCollection('projects/ee-71magicsong/assets/NTL_guangzhou');
+var landcover = ee.FeatureCollection('projects/ee-71magicsong/assets/landcover_guangzhou');
+var population = ee.FeatureCollection('projects/ee-71magicsong/assets/population_guangzhou');
+var buildingGrid = ee.FeatureCollection('users/marshhiiiiii/BuildingGrid');
+var roi = co2;
+
+// Check the quantity of the original data points
+print('The number of original CO2 data points:', co2.size());
+print('The number of original NTL data points:', ntl.size());
+print('The number of data points of original land cover:', landcover.size());
+print('The number of original population data points:', population.size());
+
+// Display the research area on the map
+Map.addLayer(roi, {}, 'Research Area');
+Map.centerObject(roi);
+
+// ==============================
+// 2. Vector to raster conversion
+// ==============================
+
+// Convert vector data to raster image
+var co2_img = co2.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('co2');
+
+var landcover_img = landcover.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('landcover');
+
+var population_img = population.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('population');
+
+var ntl_img = ntl.reduceToImage({
+  properties: ['RASTERVALU'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('ntl');
+
+var height_img = buildingGrid.reduceToImage({
+  properties: ['MeanHeight'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('MeanHeight');
+
+var cover_img = buildingGrid.reduceToImage({
+  properties: ['BuiCover'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('BuiCover');
+
+var density_img = buildingGrid.reduceToImage({
+  properties: ['BuiDensity'],
+  reducer: ee.Reducer.first()
+}).reproject(ee.Projection('EPSG:4326').atScale(1000))
+  .rename('BuiDensity');
+
+// ==============================
+// 3. Feature Engineering: Land Cover Virtual Variables and Feature Normalization
+// ==============================
+
+// Use the predefined land cover type values directly
+// There are seven effective types of land cover
+var landcoverClasses = [10, 20, 30, 40, 50, 60, 70]; // Replace with the actual land cover type values
+
+// Create a virtual variable image for land cover types
+var dummyBands = [];
+for (var i = 0; i < landcoverClasses.length - 1; i++) { // Avoid multicollinearity by using only k - 1 categories
+  var classValue = landcoverClasses[i];
+  var dummyBand = landcover_img.eq(ee.Number(classValue)).rename('lc_' + classValue);
+  dummyBands.push(dummyBand);
+}
+
+// Merge all the dummy variables into a multi-band image
+var landcover_dummy = ee.Image.cat(dummyBands);
+
+// Calculate the statistical data used for normalization
+var populationStats = population_img.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: roi.geometry(),
+  scale: 1000,
+  maxPixels: 1e13
+});
+
+var ntlStats = ntl_img.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: roi.geometry(),
+  scale: 1000,
+  maxPixels: 1e13
+});
+
+var heightStats = height_img.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: roi.geometry(),
+  scale: 1000,
+  maxPixels: 1e13
+});
+
+var coverStats = cover_img.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: roi.geometry(),
+  scale: 1000,
+  maxPixels: 1e13
+});
+
+var densityStats = density_img.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: roi.geometry(),
+  scale: 1000,
+  maxPixels: 1e13
+});
+
+// Normalized population, nighttime light and building data
+var population_norm = population_img.subtract(ee.Number(populationStats.get('population_min')))
+  .divide(ee.Number(populationStats.get('population_max')).subtract(ee.Number(populationStats.get('population_min'))))
+  .rename('population_norm');
+
+var ntl_norm = ntl_img.subtract(ee.Number(ntlStats.get('ntl_min')))
+  .divide(ee.Number(ntlStats.get('ntl_max')).subtract(ee.Number(ntlStats.get('ntl_min'))))
+  .rename('ntl_norm');
+
+var height_norm = height_img.subtract(ee.Number(heightStats.get('MeanHeight_min')))
+  .divide(ee.Number(heightStats.get('MeanHeight_max')).subtract(ee.Number(heightStats.get('MeanHeight_min'))))
+  .rename('height_norm');
+
+var cover_norm = cover_img.subtract(ee.Number(coverStats.get('BuiCover_min')))
+  .divide(ee.Number(coverStats.get('BuiCover_max')).subtract(ee.Number(coverStats.get('BuiCover_min'))))
+  .rename('cover_norm');
+
+var density_norm = density_img.subtract(ee.Number(densityStats.get('BuiDensity_min')))
+  .divide(ee.Number(densityStats.get('BuiDensity_max')).subtract(ee.Number(densityStats.get('BuiDensity_min'))))
+  .rename('density_norm');
+
+// Merge all feature images
+var com_img = ee.Image.cat([
+  landcover_dummy, 
+  population_norm, 
+  ntl_norm, 
+  height_norm, 
+  cover_norm, 
+  density_norm
+]);
+
+print('特征图像:', com_img);
+
+// ==============================
+// 4. Calculate the eigenvalues of each grid (for training)
+// ==============================
+
+// Create the initial feature set (unfiltered)
+var initial_class_fea = co2.map(function(fea) {
+  // Extract feature values for each grid
+  var stats = com_img.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: fea.geometry(),
+    scale: 1000,
+    crs: 'EPSG:4326',
+    maxPixels: 1e13
+  });
+  
+  // Obtain the CO2 value as the target variable
+  var co2Value = fea.get('RASTERVALU');
+  
+  // Return the statistical results and the CO2 value as attributes
+  return fea.set(stats).set('co2_value', co2Value);
+});
+
+print('The number of samples before extracting features:', initial_class_fea.size());
+
+// Filter out invalid values
+var class_fea = initial_class_fea.filter(ee.Filter.and(
+  ee.Filter.notNull(['ntl_norm']),
+  ee.Filter.notNull(['height_norm']),
+  ee.Filter.notNull(['cover_norm'])
+));
+print('The quantity of the filtered training data:', class_fea.size());
+
+// Check the null value situation of each feature
+var bandNames = com_img.bandNames();
+var nullCheckResults = bandNames.map(function(band) {
+  var notNullCount = initial_class_fea.filter(ee.Filter.notNull([band])).size();
+  return ee.Feature(null, {
+    'feature': band,
+    'valid_count': notNullCount,
+    'null_count': initial_class_fea.size().subtract(notNullCount)
+  });
+});
+
+print('Statistics on the missing values of each feature:', ee.FeatureCollection(nullCheckResults));
+
+print('Training data example:', class_fea.limit(5));
+
+// ==============================
+// 5. Correlation analysis of features
+// ==============================
+
+// Prepare the data for correlation analysis
+var correlationSample = class_fea.randomColumn('random');
+var correlationData = correlationSample.filter(ee.Filter.lt('random', 0.3)); // 使用30%的数据进行相关性分析
+
+// Obtain all feature names
+var bandNames = com_img.bandNames();
+print('All feature names:', bandNames);
+
+// Calculate the correlation between each feature and CO2
+var correlationsList = ee.FeatureCollection(bandNames.map(function(band) {
+  band = ee.String(band);
+
+  var correlation = correlationData.reduceColumns({
+    reducer: ee.Reducer.pearsonsCorrelation(),
+    selectors: [band, 'co2_value']
+  });
+
+  var corr = ee.Number(correlation.get('correlation'));
+
+  // Determine whether corr is NaN
+  var corrIsValid = corr.neq(corr).not();
+
+  return ee.Algorithms.If(corrIsValid,
+    ee.Feature(null, {
+      'feature': band,
+      'correlation': corr,
+      'correlation_abs': corr.abs()
+    }),
+    null
+  );
+})).filter(ee.Filter.notNull(['correlation']));
+
+// Convert the correlation results into FeatureCollection and sort them by the absolute value of correlation
+var correlationsFC = ee.FeatureCollection(correlationsList)
+  .sort('correlation_abs', false);
+
+print('Order of the correlation between the characteristics and CO2:', correlationsFC);
+
+// Export the results of correlation analysis
+Export.table.toDrive({
+  collection: correlationsFC,
+  description: 'Feature_Correlations',
+  fileFormat: 'CSV'
+});
+
+// ==============================
+// 6. Prepare training and testing data
+// ==============================
+
+// Randomly divide the training set and the test set
+var split = 0.7;  // 70% is allocated for training and 30% for testing
+var withRandom = class_fea.randomColumn('random');
+var trainingSet = withRandom.filter(ee.Filter.lt('random', split));
+var testingSet = withRandom.filter(ee.Filter.gte('random', split));
+
+print('The number of samples in the training set:', trainingSet.size());
+print('The number of samples in the test set:', testingSet.size());
+
+// Obtain the features with relatively high relevance (the top 6)
+var topFeaturesInfo = correlationsFC.limit(6).aggregate_array('feature');
+print('Select the top-level features to be used for the model:', topFeaturesInfo);
+
+// ==============================
+// 7. Random Forest Regression Training
+// ==============================
+
+// Carry out regression modeling using random forest (using all features)
+var allFeaturesRF = ee.Classifier.smileRandomForest(200)
+  .setOutputMode('REGRESSION')
+  .train({
+    features: trainingSet,
+    classProperty: "RASTERVALU",
+    inputProperties: bandNames
+  });
+
+// Carry out regression modeling using random forest (only using features with high correlation)
+var topFeaturesRF = ee.Classifier.smileRandomForest(200)
+  .setOutputMode('REGRESSION')
+  .train({
+    features: trainingSet,
+    classProperty: "RASTERVALU",
+    inputProperties: topFeaturesInfo
+  });
+
+// Make predictions on images using the trained model
+var predictedImageAll = com_img.classify(allFeaturesRF)
+  .clip(roi)
+  .float()
+  .rename('predicted_all');
+
+var predictedImageTop = com_img.classify(topFeaturesRF)
+  .clip(roi)
+  .float()
+  .rename('predicted_top');
+
+// Display the image of the predicted result
+var visParams = {
+  min: 0,
+  max: ee.Number(co2.aggregate_mean('RASTERVALU')).multiply(2).getInfo(),
+  palette: ['blue', 'cyan', 'green', 'yellow', 'orange', 'red']
+};
+
+Map.addLayer(co2_img, visParams, 'Actual CO2 emissions');
+Map.addLayer(predictedImageAll, visParams, 'Forecasting CO2 emissions (all features)');
+Map.addLayer(predictedImageTop, visParams, 'Predict CO2 emissions (top features)');
+
+// ==============================
+// 8. Model evaluation
+// ==============================
+
+// Make predictions on the test set
+var testPredictAll = testingSet.classify(allFeaturesRF, 'predicted_all');
+var testPredictTop = testingSet.classify(topFeaturesRF, 'predicted_top');
+
+// Calculate the R² and RMSE of all the feature models.
+var allFeaturesStats = testPredictAll.reduceColumns({
+  reducer: ee.Reducer.pearsonsCorrelation(),
+  selectors: ['RASTERVALU', 'predicted_all']
+});
+
+var allFeaturesRMSE = testPredictAll.map(function(feature) {
+  var diff = ee.Number(feature.get('RASTERVALU')).subtract(ee.Number(feature.get('predicted_all')));
+  return feature.set('diff_sq', diff.pow(2));
+}).reduceColumns({
+  reducer: ee.Reducer.mean(),
+  selectors: ['diff_sq']
+});
+
+// Calculate the R² and RMSE of the top-level feature model
+var topFeaturesStats = testPredictTop.reduceColumns({
+  reducer: ee.Reducer.pearsonsCorrelation(),
+  selectors: ['RASTERVALU', 'predicted_top']
+});
+
+var topFeaturesRMSE = testPredictTop.map(function(feature) {
+  var diff = ee.Number(feature.get('RASTERVALU')).subtract(ee.Number(feature.get('predicted_top')));
+  return feature.set('diff_sq', diff.pow(2));
+}).reduceColumns({
+  reducer: ee.Reducer.mean(),
+  selectors: ['diff_sq']
+});
+
+// Output evaluation results
+print('All feature models - R:', allFeaturesStats.get('correlation'));
+print('All feature models - R²:', ee.Number(allFeaturesStats.get('correlation')).pow(2));
+print('All feature models - RMSE:', ee.Number(allFeaturesRMSE.get('mean')).sqrt());
+
+print('Top-level feature model - R:', topFeaturesStats.get('correlation'));
+print('Top-level feature model - R²:', ee.Number(topFeaturesStats.get('correlation')).pow(2));
+print('Top-level feature model - RMSE:', ee.Number(topFeaturesRMSE.get('mean')).sqrt());
+
+// ==============================
+// 9. Export results
+// ==============================
+
+// Export the evaluation results of the model
+var evaluationResults = ee.FeatureCollection([
+  ee.Feature(null, {
+    'model': 'All Features',
+    'R': allFeaturesStats.get('correlation'),
+    'R_squared': ee.Number(allFeaturesStats.get('correlation')).pow(2),
+    'RMSE': ee.Number(allFeaturesRMSE.get('mean')).sqrt(),
+    'features_used': bandNames.size()
+  }),
+  ee.Feature(null, {
+    'model': 'Top Features',
+    'R': topFeaturesStats.get('correlation'),
+    'R_squared': ee.Number(topFeaturesStats.get('correlation')).pow(2),
+    'RMSE': ee.Number(topFeaturesRMSE.get('mean')).sqrt(),
+    'features_used': ee.List(topFeaturesInfo).size()
+  })
+]);
+
+Export.table.toDrive({
+  collection: evaluationResults,
+  description: 'Model_Evaluation_Results',
+  fileFormat: 'CSV'
+});
+
+// Export training data
+Export.table.toDrive({
+  collection: class_fea,
+  description: 'Training_Data_With_Features',
+  fileFormat: 'CSV'
+});
+
+// Export the predicted results
+Export.image.toDrive({
+  image: predictedImageTop,
+  description: 'CO2_Prediction_Map',
+  scale: 1000,
+  region: roi.geometry(),
+  fileFormat: 'GeoTIFF'
+});
