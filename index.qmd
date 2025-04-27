@@ -1,4 +1,4 @@
-# CASA00025 Group Project FTTE
+# CASA00025 FTTE Group Project
 
 ## Project Summary 
 
@@ -49,6 +49,28 @@ Replace the link below with the link to your application.
 ## How it Works 
 
 Use this section to explain how your application works using code blocks and text explanations (no more than 500 words excluding code):
+
+This **Google Earth Engine (GEE)** script delivers an integrated dashboard for Guangzhou that combines **time-series CO₂ monitoring, multi-layer spatial comparison, and “what-if” land-cover simulations** in one map. The workflow has four parts:
+
+### 1  Data ingestion
+CO₂ rasters (2017 – 2023) are loaded by year; population, night-time-light (NTL) and building statistics come as feature collections and are converted to rasters with `reduceToImage()`. 5-to-95 percentile scaling ensures consistent colour ramps. District boundaries are added for reference and always kept on top.
+
+### 2  Thematic layers  
+* **Land-cover 2023** A median Landsat-9 composite is classified with a 50-tree Random-Forest trained on ESA WorldCover samples, producing seven classes with a custom palette.  
+* **CO₂ emissions** The default view shows 2023; a drop-down instantly swaps any other year.  
+* **Population density, NTL, building height, density and footprint ratio** are stored in a dictionary so one selector can toggle them; the legend is generated on the fly by `createLegend()`.
+
+### 3  Interactive GUI  
+Two floating panels orchestrate the interface:  
+* **Right panel**: year selector → CO₂ raster; line chart of city-wide means; auto-refreshing district bar chart.  
+* **Left panel**: thematic-layer drop-down; live legend; 2023 land-cover pie chart. Clicking the map samples the active raster and returns the value + units.  
+`bringBoundaryToFront()` re-adds the boundary layer after every change to guarantee visibility.
+
+### 4  Scenario prediction  
+Inside six core districts, 2 000 pixels are sampled to train a 100-tree **Random-Forest regression** that predicts CO₂ from eleven land-cover dummies plus building, population and density features.  
+The *Prediction* panel offers three preset transformations (e.g. **20 % built-up → forest**). Selected pixels are altered with `where()`, the model recomputes emissions, and the **difference map** (blue = decrease, red = increase) appears, allowing planners to gauge mitigation potential in seconds.
+---
+
 
 ```js
 Map.setCenter(35.51898, 33.90153, 15);
