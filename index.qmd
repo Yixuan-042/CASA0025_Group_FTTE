@@ -127,13 +127,17 @@ This section describes how different data layers are managed and visualized with
   - Theme layer selector
   - Dynamically updated legend
   - Pie chart of land cover proportions in 2023
+- **The predict panel contains:**
+  - Select the combination to be simulated
+  - Button for submitting a simulation request 
+  - Simulation result display
 - Real-time sampling and display of pixel values and units when clicking on the map.
 
 ### 3. Predictive Modeling with Random Forest
 
 This project uses a Random Forest model to predict CO₂ emissions from urban features. 
 Users select landcover change scenarios (e.g., Built-up to Forest), apply changes, and the model automatically re-predicts CO₂ emissions based on the updated features, showing spatial impacts and emission percentage changes.
-The model focuses on the city’s core districts to ensure higher prediction accuracy and computational efficiency.
+In order to improve computational efficiency and accuracy, the simulator was pre-programmed with three sets of combinations of changing land types, and the simulation area was focused on the six zones with the highest CO2 emissions.
 
 ```js
 // Feature engineering
