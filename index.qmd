@@ -1,4 +1,4 @@
-# CASA00025 FTTE Group Project
+#  CO₂ Emission Analysis and Projections in Guangzhou, China
 
 ## Project Summary 
 
