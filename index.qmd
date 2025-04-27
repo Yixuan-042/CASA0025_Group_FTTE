@@ -66,7 +66,7 @@ var ntlFC = ee.FeatureCollection('projects/.../NTL0422');
 var buildingStats = ee.FeatureCollection('projects/.../BuildingGrid0424');
 var co2Paths = { 2017: 'users/.../2017co2', ..., 2023: 'users/.../2023co2' };
 Map.centerObject(districts, 9);
----
+```
 
 A boundary layer is added to the map, ensuring district outlines remain on top of all visualizations.
 
@@ -80,7 +80,7 @@ var composite = landsat9.median().clip(districts);
 var samples = composite.addBands(esa).sample({ ... });
 var classifier = ee.Classifier.smileRandomForest(50).train({ ... });
 var classified = composite.classify(classifier).remap([10,20,...],[0,1,...]);
----
+```
 
 ### CO₂ Emission Visualization
 
@@ -93,7 +93,7 @@ var co2Images = years.reduce(function(obj, y) {
   return obj;
 }, {});
 Map.layers().set(2, ui.Map.Layer(co2Images[2023], visParamsCO2, 'CO₂ Emission'));
----
+```
 
 ### Thematic Layers and Interaction
 A thematic selector enables users to switch between layers such as population density, nighttime lights, and building characteristics.
@@ -107,7 +107,7 @@ var visParamsDict = {
 };
 selector.onChange(function(key) { ... });
 Map.onClick(function(coords) { ... });
----
+```
 
 ### Predictive Modeling with Random Forest
 
