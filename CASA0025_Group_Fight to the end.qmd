@@ -29,9 +29,9 @@ Building data is sourced from Gaode Map’s 3D Map API (Gaode Map 3D), including
 
 ### Methodology
 
-Data Preprocessing: Clip and project CO2 emissions, landcover types, urban building coverage, population, and nighttime light data in Guangzhou to create uniform raster files.
-Model Construction: Use Random Forest machine learning with land cover types, urban building coverage, population, and nighttime light data as independent variables, and CO2 emissions as the dependent variable. Address multicollinearity by processing six landcover types, forming regression models for Guangzhou's administrative and built-up areas.
-Visualization and Prediction: Design layers to display CO2 emissions distribution. Utilize the fourth regression model to simulate urban densification impacts on emissions, adjusting landcover proportions to predict future CO2 levels.
+Data Preprocessing: Clip and project CO2 emissions, landcover types, building coverage, population, and nighttime light data in Guangzhou to create uniform raster files.
+Model Construction: Employ Random Forest with CO2 emissions as the dependent variable and the rest of data as independent variables. The model is constructed for the six urban areas in the central Guangzhou by conducting regression analysis after screening the independent variables by colinearity.
+Visualization and Prediction: Design layers to display CO2 emissions distribution. Use the regression model to simulate urban densification effects, by adjusting land cover proportions to forecast future emissions.
 
 ### Interface
 
