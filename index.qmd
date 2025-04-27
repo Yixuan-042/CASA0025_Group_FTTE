@@ -66,9 +66,53 @@ var ntlFC = ee.FeatureCollection('projects/.../NTL0422');
 var buildingStats = ee.FeatureCollection('projects/.../BuildingGrid0424');
 var co2Paths = { 2017: 'users/.../2017co2', ..., 2023: 'users/.../2023co2' };
 Map.centerObject(districts, 9);
+---
 
 A boundary layer is added to the map, ensuring district outlines remain on top of all visualizations.
- 
+
+### Landcover Classification
+
+Landsat 9 imagery and ESA WorldCover data are used to train a Random Forest classifier.
+The resulting landcover classification is simplified into 7 categories for clearer visualization.
+
+```js
+var composite = landsat9.median().clip(districts);
+var samples = composite.addBands(esa).sample({ ... });
+var classifier = ee.Classifier.smileRandomForest(50).train({ ... });
+var classified = composite.classify(classifier).remap([10,20,...],[0,1,...]);
+---
+
+### CO₂ Emission Visualization
+
+The application visualizes CO₂ emissions dynamically across different years.
+A dropdown menu allows users to switch between annual layers, and charts provide both citywide trends and district-level distributions.
+
+```js
+var co2Images = years.reduce(function(obj, y) {
+  obj[y] = ee.Image(co2Paths[y]);
+  return obj;
+}, {});
+Map.layers().set(2, ui.Map.Layer(co2Images[2023], visParamsCO2, 'CO₂ Emission'));
+---
+
+### Thematic Layers and Interaction
+A thematic selector enables users to switch between layers such as population density, nighttime lights, and building characteristics.
+Clicking on the map displays real-time attribute values for the selected theme.
+
+```js
+var visParamsDict = {
+  'Population Density': { image: popMasked, vis: {min: 0, max: 5000, palette: [...]}, units: 'people/km²' },
+  'Nighttime Lights': { ... },
+  ...
+};
+selector.onChange(function(key) { ... });
+Map.onClick(function(coords) { ... });
+---
+
+### Predictive Modeling with Random Forest
+
+The app constructs a Random Forest regression model to predict CO₂ emissions based on....
+
 
 ---
 
