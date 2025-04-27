@@ -13,7 +13,7 @@ This application is designed for urban planners, policymakers, and environmental
 ### Data
 
 CO₂ Emissions Data:
-Annual CO₂ emissions data is sourced from the ODIAC 2023 dataset (ODIAC 2023). Historical emissions from 2018 to 2022 are also included to support temporal trend analysis.
+Annual CO₂ emissions data is sourced from the ODIAC 2023 dataset (ODIAC 2023). Historical emissions from 2017 to 2022 are also included to support temporal trend analysis.
 
 Land Cover Data:
 Land cover classification is generated using Landsat 9 Surface Reflectance imagery and ESA WorldCover 2021 as training labels. A Random Forest model is trained and applied in Google Earth Engine to produce a 30-meter resolution land cover map.
